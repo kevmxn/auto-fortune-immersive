@@ -1,2 +1,10 @@
 flask
 requests
+aiohttp==3.9.5
+websockets==12.0
+requests==2.31.0
+websocket-client==1.8.0
+brotli
+aiosqlite
+curl_cffi>=0.6.0
+cloudscraper==1.2.71
