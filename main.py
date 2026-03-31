@@ -1,10 +1,12 @@
 # ============================================================================
-# SISTEMA DE EVENTOS DE RULETA CON SSE - VERSIÓN FINAL
+# SISTEMA DE EVENTOS DE RULETA CON SSE - VERSIÓN CON DOCENA Y COLUMNA
 # ============================================================================
 # Características:
 # - 8 mesas de ruleta con IDs 300-307
 # - Cada mesa tiene su propio contador de rondas (Round # independiente)
 # - Mantiene solo los últimos 20 giros por mesa en SQLite
+# - Columnas: número, color (Rojo/Negro/Cero), tipo (Par/Impar/Cero), rango (Bajo/Alto/Cero),
+#   docena (1/2/3/Cero), columna (1/2/3/Cero)
 # - Cuando un cliente se conecta, recibe el lote inicial de los últimos 20 resultados
 # - Cuando se detecta un nuevo giro, se envía el lote actualizado a todos los clientes conectados
 # - Polling adaptativo: normal 20s, después de 15s sin giro pasa a 1s
@@ -130,7 +132,7 @@ class ClienteAPI:
         return None
 
 # ============================================================================
-# FORMATEADOR DE DATOS
+# FORMATEADOR DE DATOS (convierte a español y calcula docena/columna)
 # ============================================================================
 class Formateador:
     @staticmethod
@@ -142,15 +144,54 @@ class Formateador:
         numero = resultado_final.get("number")
         if numero is None:
             return None   # No es un giro válido
-        color = resultado_final.get("color")
-        tipo_original = resultado_final.get("type")
-        tipo = "Par" if tipo_original == "Even" else "Impar" if tipo_original == "Odd" else tipo_original
-        rango = ""
-        if numero is not None:
+
+        # Manejo del número 0
+        if numero == 0:
+            color = "Cero"
+            tipo = "Cero"
+            rango = "Cero"
+            docena = "Cero"
+            columna = "Cero"
+        else:
+            # Color en español
+            color_original = resultado_final.get("color")
+            if color_original == "Red":
+                color = "Rojo"
+            elif color_original == "Black":
+                color = "Negro"
+            else:
+                color = color_original  # por si acaso
+
+            # Tipo (Par/Impar) en español
+            tipo_original = resultado_final.get("type")
+            if tipo_original == "Even":
+                tipo = "Par"
+            elif tipo_original == "Odd":
+                tipo = "Impar"
+            else:
+                tipo = tipo_original
+
+            # Rango
             if 1 <= numero <= 18:
                 rango = "Bajo"
             elif 19 <= numero <= 36:
                 rango = "Alto"
+            else:
+                rango = ""  # no debería pasar
+
+            # Docena
+            if 1 <= numero <= 12:
+                docena = "1"
+            elif 13 <= numero <= 24:
+                docena = "2"
+            elif 25 <= numero <= 36:
+                docena = "3"
+            else:
+                docena = ""
+
+            # Columna: ((número-1) % 3) + 1
+            columna = str(((numero - 1) % 3) + 1)
+
         momento = datos_internos.get("settledAt")
         if momento:
             dt = datetime.fromisoformat(momento.replace('Z', '+00:00')).replace(tzinfo=None)
@@ -158,24 +199,28 @@ class Formateador:
         else:
             hora = ""
             dt = None
+
         return {
             "api_id": api_id,
             "numero": numero,
             "color": color,
             "tipo": tipo,
             "rango": rango,
+            "docena": docena,
+            "columna": columna,
             "hora": hora,
             "momento_dt": dt
         }
 
 # ============================================================================
-# BASE DE DATOS CON CONTADOR DE RONDAS POR MESA
+# BASE DE DATOS CON CONTADOR DE RONDAS POR MESA + DOCENA/COLUMNA
 # ============================================================================
 class BaseDeDatos:
     def __init__(self, db_path="spins.db"):
         self.db_path = db_path
         self._crear_tabla()
-    
+        self._agregar_columnas_si_faltan()
+
     def _crear_tabla(self):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -189,6 +234,8 @@ class BaseDeDatos:
                     color TEXT,
                     tipo TEXT,
                     rango TEXT,
+                    docena TEXT,
+                    columna TEXT,
                     hora TEXT,
                     timestamp TEXT,
                     UNIQUE(mesa_id, api_id),
@@ -196,33 +243,47 @@ class BaseDeDatos:
                 )
             ''')
             conn.commit()
-        logging.info("Tabla 'giros' lista.")
-    
+        logging.info("Tabla 'giros' lista (o ya existía).")
+
+    def _agregar_columnas_si_faltan(self):
+        """Agrega las columnas docena y columna si no existen (migración)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            # Obtener columnas existentes
+            cursor.execute("PRAGMA table_info(giros)")
+            columnas = [col[1] for col in cursor.fetchall()]
+            if "docena" not in columnas:
+                cursor.execute("ALTER TABLE giros ADD COLUMN docena TEXT")
+                logging.info("Columna 'docena' añadida a la tabla.")
+            if "columna" not in columnas:
+                cursor.execute("ALTER TABLE giros ADD COLUMN columna TEXT")
+                logging.info("Columna 'columna' añadida a la tabla.")
+            conn.commit()
+
     def _siguiente_round(self, mesa_id):
-        """Devuelve el siguiente número de ronda para una mesa (atómico)."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT MAX(round_number) FROM giros WHERE mesa_id = ?", (mesa_id,))
             max_round = cursor.fetchone()[0]
             return 1 if max_round is None else max_round + 1
-    
-    def insertar_giro(self, mesa_id, api_id, numero, color, tipo, rango, hora):
+
+    def insertar_giro(self, mesa_id, api_id, numero, color, tipo, rango, docena, columna, hora):
         try:
             round_num = self._siguiente_round(mesa_id)
             now = datetime.utcnow().isoformat()
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO giros (mesa_id, api_id, round_number, numero, color, tipo, rango, hora, timestamp)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (mesa_id, api_id, round_num, numero, color, tipo, rango, hora, now))
+                    INSERT INTO giros (mesa_id, api_id, round_number, numero, color, tipo, rango, docena, columna, hora, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (mesa_id, api_id, round_num, numero, color, tipo, rango, docena, columna, hora, now))
                 conn.commit()
             self._limpiar_mesa(mesa_id)
             return True
         except sqlite3.IntegrityError:
             logging.debug(f"Giro duplicado para mesa {mesa_id}: {api_id}")
             return False
-    
+
     def _limpiar_mesa(self, mesa_id, keep=20):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -237,12 +298,12 @@ class BaseDeDatos:
                 )
             ''', (mesa_id, mesa_id, keep))
             conn.commit()
-    
+
     def obtener_ultimos(self, mesa_id, n=20):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT round_number, api_id, numero, color, tipo, rango, hora, timestamp
+                SELECT round_number, api_id, numero, color, tipo, rango, docena, columna, hora, timestamp
                 FROM giros
                 WHERE mesa_id = ?
                 ORDER BY timestamp DESC
@@ -252,17 +313,19 @@ class BaseDeDatos:
             resultados = []
             for row in rows:
                 resultados.append({
-                    "id": row[0],          # Round # (independiente por mesa)
+                    "id": row[0],
                     "api_id": row[1],
                     "numero": row[2],
                     "color": row[3],
                     "tipo": row[4],
                     "rango": row[5],
-                    "hora": row[6],
-                    "timestamp": row[7]
+                    "docena": row[6],
+                    "columna": row[7],
+                    "hora": row[8],
+                    "timestamp": row[9]
                 })
             return resultados
-    
+
     def existe_giro(self, mesa_id, api_id):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -349,11 +412,10 @@ class PollerMesa:
                     if not self.db.existe_giro(self.mesa.id, api_id):
                         insertado = self.db.insertar_giro(
                             self.mesa.id, api_id,
-                            giro["numero"], giro["color"],
-                            giro["tipo"], giro["rango"], giro["hora"]
+                            giro["numero"], giro["color"], giro["tipo"],
+                            giro["rango"], giro["docena"], giro["columna"], giro["hora"]
                         )
                         if insertado:
-                            # Actualizar timestamp del último giro
                             if giro["momento_dt"]:
                                 self.ultimo_giro_tiempo = giro["momento_dt"]
                             else:
@@ -374,7 +436,7 @@ class PollerMesa:
 # APLICACIÓN FLASK
 # ============================================================================
 app = Flask(__name__)
-CORS(app)  # Habilita CORS para todos los orígenes
+CORS(app)
 
 db = None
 gestor = None
@@ -476,9 +538,8 @@ def dashboard():
             <div class="update-time" id="lastUpdate">🕒 --</div>
         </div>
         <div class="table-wrapper">
-            <table id="spinsTable"><thead><tr><th>Round #</th><th>Número</th><th>Color</th><th>Tipo</th><th>Rango</th><th>Hora</th></thead><tbody id="spinsBody"><tr><td colspan="6" class="no-data">⏳ Esperando datos...</td></tr></tbody></table>
+            <table id="spinsTable"><thead><th>Round #</th><th>Número</th><th>Color</th><th>Tipo</th><th>Rango</th><th>Hora</th></thead><tbody id="spinsBody">发展<td colspan="6" class="no-data">⏳ Esperando datos...发展</tbody>发展</table>
         </div>
-        <div class="footer">🔄 Los datos se actualizan automáticamente con cada nuevo giro.<br>ℹ️ Cada ruleta tiene su propio contador de rondas.</div>
     </div>
 </div>
 <script>
@@ -492,9 +553,9 @@ def dashboard():
         let html='';
         spins.forEach(s=>{
             let colorStyle='';
-            if(s.color==='Red') colorStyle='color:#f87171;font-weight:500;';
-            else if(s.color==='Black') colorStyle='color:#9ca3af;font-weight:500;';
-            else if(s.color==='Green') colorStyle='color:#4ade80;font-weight:500;';
+            if(s.color==='Rojo') colorStyle='color:#f87171;font-weight:500;';
+            else if(s.color==='Negro') colorStyle='color:#9ca3af;font-weight:500;';
+            else if(s.color==='Cero') colorStyle='color:#4ade80;font-weight:500;';
             html+=`<tr><td style="font-family:monospace;">${s.id}</td><td style="${colorStyle}">${s.numero??'-'}</td><td>${s.color??'-'}</td><td>${s.tipo??'-'}</td><td>${s.rango??'-'}</td><td style="font-size:0.8rem;">${s.hora??'-'}</td></tr>`;
         });
         spinsBody.innerHTML=html;
