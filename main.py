@@ -76,7 +76,7 @@ class MesaConfig:
 
 MESAS = [
     MesaConfig(300, "Auto Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/autoroulette/latest"),
-    MesaConfig(301, "Immersive Roulette", "https://api-cs.casino.org/cg-neptune-notification-center/api/evolobby/playercount/latest"),
+    MesaConfig(301, "Immersive Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/immersiveroulette/latest"),
     MesaConfig(302, "Fortune Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/fortuneroulette/latest")
 ]
 
@@ -501,90 +501,248 @@ def dashboard():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ruletas en Vivo - Casino Data</title>
+    <title>Ruletas en Vivo</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background: #1e1e2f; color: #f0f0f0; }
-        h1 { text-align: center; color: #ffd966; }
-        .container { max-width: 1200px; margin: auto; background: #2a2a3b; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-        .controls { margin-bottom: 20px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
-        label { font-weight: bold; }
-        select, button { padding: 8px 12px; border-radius: 6px; border: none; background: #3a3a4e; color: white; cursor: pointer; font-size: 1rem; }
-        select:hover, button:hover { background: #4a4a62; }
-        .status { font-size: 0.9rem; background: #1a1a2a; padding: 5px 10px; border-radius: 20px; display: inline-block; }
-        .connected { color: #2ecc71; }
-        .disconnected { color: #e74c3c; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #2a2a3b; }
-        th, td { border: 1px solid #444; padding: 10px; text-align: center; }
-        th { background: #3a3a4e; color: #ffd966; font-weight: bold; }
-        tr:nth-child(even) { background: #32324a; }
-        .footer { margin-top: 20px; text-align: center; font-size: 0.8rem; color: #aaa; }
-        .update-time { font-size: 0.8rem; color: #ccc; margin-left: auto; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #111827;
+            color: #e5e7eb;
+            padding: 2rem 1rem;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            color: #fbbf24;
+        }
+
+        .sub {
+            color: #9ca3af;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .card {
+            background: #1f2937;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #374151;
+        }
+
+        .select-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: #111827;
+            padding: 0.3rem 1rem;
+            border-radius: 2rem;
+        }
+
+        select {
+            background: #111827;
+            color: #fbbf24;
+            border: 1px solid #374151;
+            border-radius: 1.5rem;
+            padding: 0.4rem 1.8rem 0.4rem 1rem;
+            font-size: 0.9rem;
+            cursor: pointer;
+            outline: none;
+        }
+
+        button {
+            background: #fbbf24;
+            color: #111827;
+            border: none;
+            border-radius: 2rem;
+            padding: 0.5rem 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #f59e0b;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            background: #111827;
+            padding: 0.4rem 1rem;
+            border-radius: 2rem;
+        }
+
+        .connected { color: #10b981; }
+        .disconnected { color: #ef4444; }
+
+        .update-time {
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            margin-top: 1rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            padding: 0.75rem 0.5rem;
+            text-align: center;
+            border-bottom: 1px solid #374151;
+        }
+
+        th {
+            background: #111827;
+            font-weight: 600;
+            color: #fbbf24;
+        }
+
+        tr:hover td {
+            background: #111827;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+        }
+
+        .footer {
+            margin-top: 1.5rem;
+            text-align: center;
+            font-size: 0.75rem;
+            color: #6b7280;
+            border-top: 1px solid #374151;
+            padding-top: 1rem;
+        }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>🎲 Datos de Ruletas en Vivo</h1>
-    <div class="controls">
-        <label>Seleccionar Ruleta:</label>
-        <select id="mesaSelect">
-            <option value="300">Auto Roulette (300)</option>
-            <option value="301">Immersive Roulette (301)</option>
-            <option value="302">Fortune Roulette (302)</option>
-        </select>
-        <button id="connectBtn">Conectar</button>
-        <span id="status" class="status">Desconectado</span>
-        <span id="lastUpdate" class="update-time">Última actualización: --</span>
+    <h1>🎲 Ruletas en Vivo</h1>
+    <div class="sub">Últimos 20 giros · Actualización en tiempo real</div>
+
+    <div class="card">
+        <div class="controls">
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <div class="select-group">
+                    <span>📌 Mesa</span>
+                    <select id="mesaSelect">
+                        <option value="300">Auto Roulette (300)</option>
+                        <option value="301">Immersive Roulette (301)</option>
+                        <option value="302">Fortune Roulette (302)</option>
+                    </select>
+                </div>
+                <button id="connectBtn">Conectar</button>
+                <div class="status">
+                    <span id="statusDot">⚫</span>
+                    <span id="statusText">Desconectado</span>
+                </div>
+            </div>
+            <div class="update-time" id="lastUpdate">🕒 --</div>
+        </div>
+
+        <div class="table-wrapper">
+            <table id="spinsTable">
+                <thead>
+                    <tr><th>Round #</th><th>Número</th><th>Color</th><th>Tipo</th><th>Rango</th><th>Hora</th></tr>
+                </thead>
+                <tbody id="spinsBody">
+                    <tr><td colspan="6" class="no-data">⏳ Esperando datos...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="footer">
+            🔄 Los datos se actualizan automáticamente con cada nuevo giro.<br>
+            ℹ️ Immersive Roulette actualmente no publica giros (solo conteo de jugadores). Si deseas ver sus resultados, verifica el endpoint correcto.
+        </div>
     </div>
-    <div id="tableContainer">
-        <table id="spinsTable">
-            <thead>
-                <tr><th>Round #</th><th>Número</th><th>Color</th><th>Tipo</th><th>Rango</th><th>Hora</th></tr>
-            </thead>
-            <tbody id="spinsBody">发展<td colspan="6">Esperando datos...发展</tbody>
-         </>
-    </div>
-    <div class="footer">Datos actualizados en tiempo real. Conexión SSE activa.</div>
 </div>
+
 <script>
+    // Si el HTML se sirve desde el mismo servidor, deja SERVER_BASE vacío.
+    // Si lo abres localmente, cambia a la URL de tu servidor:
+    const SERVER_BASE = "";  // Ejemplo: "https://casinoscores-es.onrender.com"
+
     let eventSource = null;
     let currentMesa = null;
+
     const mesaSelect = document.getElementById('mesaSelect');
     const connectBtn = document.getElementById('connectBtn');
-    const statusSpan = document.getElementById('status');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
     const lastUpdateSpan = document.getElementById('lastUpdate');
     const spinsBody = document.getElementById('spinsBody');
 
     function updateTable(spins) {
         if (!spins || spins.length === 0) {
-            spinsBody.innerHTML = '<tr><td colspan="6">No hay datos aún. Esperando primer giro...</td></tr>';
+            spinsBody.innerHTML = '<tr><td colspan="6" class="no-data">📭 No hay datos aún. Esperando primer giro...</td></tr>';
             return;
         }
         let html = '';
         spins.forEach(spin => {
-            const colorStyle = spin.color ? `color: ${spin.color === 'Red' ? '#e74c3c' : (spin.color === 'Black' ? '#2c3e50' : '#f1c40f')}; font-weight: bold;` : '';
-            html += `<tr>
-                <td>${spin.id}</td>
-                <td style="${colorStyle}">${spin.numero !== undefined ? spin.numero : '-'}</td>
-                <td>${spin.color || '-'}</td>
-                <td>${spin.tipo || '-'}</td>
-                <td>${spin.rango || '-'}</td>
-                <td>${spin.hora || '-'}</td>
-            </tr>`;
+            let numberColor = '';
+            if (spin.color === 'Red') numberColor = 'color: #f87171; font-weight:500;';
+            else if (spin.color === 'Black') numberColor = 'color: #9ca3af; font-weight:500;';
+            else if (spin.color === 'Green') numberColor = 'color: #4ade80; font-weight:500;';
+
+            html += `
+                <tr>
+                    <td style="font-family: monospace;">${spin.id}</td>
+                    <td style="${numberColor}">${spin.numero ?? '-'}</td>
+                    <td>${spin.color ?? '-'}</td>
+                    <td>${spin.tipo ?? '-'}</td>
+                    <td>${spin.rango ?? '-'}</td>
+                    <td style="font-size:0.8rem;">${spin.hora ?? '-'}</td>
+                </tr>
+            `;
         });
         spinsBody.innerHTML = html;
         const now = new Date();
-        lastUpdateSpan.innerText = `Última actualización: ${now.toLocaleTimeString()}`;
+        lastUpdateSpan.innerText = `🕒 ${now.toLocaleTimeString()}`;
     }
 
     function setStatus(connected) {
         if (connected) {
-            statusSpan.innerHTML = '🟢 Conectado';
-            statusSpan.classList.add('connected');
-            statusSpan.classList.remove('disconnected');
+            statusDot.innerHTML = '🟢';
+            statusText.innerHTML = 'Conectado';
+            statusText.className = 'connected';
         } else {
-            statusSpan.innerHTML = '🔴 Desconectado';
-            statusSpan.classList.add('disconnected');
-            statusSpan.classList.remove('connected');
+            statusDot.innerHTML = '🔴';
+            statusText.innerHTML = 'Desconectado';
+            statusText.className = 'disconnected';
         }
     }
 
@@ -593,22 +751,38 @@ def dashboard():
             eventSource.close();
             eventSource = null;
         }
-        const url = `/events/${mesaId}`;
+        const url = `${SERVER_BASE}/events/${mesaId}`;
+        console.log('Conectando a', url);
         eventSource = new EventSource(url);
-        eventSource.onopen = () => { setStatus(true); console.log(`Conectado a mesa ${mesaId}`); };
-        eventSource.onerror = (err) => { console.error('Error:', err); setStatus(false); };
-        eventSource.addEventListener('init', (e) => { updateTable(JSON.parse(e.data)); });
-        eventSource.addEventListener('update', (e) => { updateTable(JSON.parse(e.data)); });
+
+        eventSource.onopen = () => {
+            setStatus(true);
+            console.log(`Conectado a mesa ${mesaId}`);
+        };
+
+        eventSource.onerror = (err) => {
+            console.error('Error SSE', err);
+            setStatus(false);
+        };
+
+        eventSource.addEventListener('init', (e) => {
+            updateTable(JSON.parse(e.data));
+        });
+
+        eventSource.addEventListener('update', (e) => {
+            updateTable(JSON.parse(e.data));
+        });
     }
 
     connectBtn.addEventListener('click', () => {
-        const mesaId = mesaSelect.value;
+        const mesaId = parseInt(mesaSelect.value);
         if (mesaId === currentMesa) return;
         currentMesa = mesaId;
         connect(currentMesa);
     });
+
     window.addEventListener('load', () => {
-        currentMesa = mesaSelect.value;
+        currentMesa = parseInt(mesaSelect.value);
         connect(currentMesa);
     });
 </script>
