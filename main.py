@@ -77,7 +77,12 @@ class MesaConfig:
 MESAS = [
     MesaConfig(300, "Auto Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/autoroulette/latest"),
     MesaConfig(301, "Immersive Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/immersiveroulette/latest"),
-    MesaConfig(302, "Fortune Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/fortuneroulette/latest")
+    MesaConfig(302, "Fortune Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/fortuneroulette/latest"),
+    MesaConfig(303, "Lightning Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/lightningroulette/latest"),
+    MesaConfig(304, "XXXtreme Lightning Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/xxxtremelightningroulette/latest"),
+    MesaConfig(305, "Gold Vault Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/goldvaultroulette/latest"),
+    MesaConfig(306, "Fireball Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/fireballroulette/latest"),
+    MesaConfig(307, "Red Door Roulette", "https://api-cs.casino.org/svc-evolution-game-events/api/reddoorroulette/latest")
 ]
 
 # ============================================================================
@@ -663,6 +668,11 @@ def dashboard():
                         <option value="300">Auto Roulette (300)</option>
                         <option value="301">Immersive Roulette (301)</option>
                         <option value="302">Fortune Roulette (302)</option>
+                        <option value="303">Lightning Roulette (303)</option>
+                        <option value="304">XXXtreme Lightning Roulette (304)</option>
+                        <option value="305">Gold Vault Roulette (305)</option>
+                        <option value="306">Fireball Roulette (306)</option>
+                        <option value="307">Red Door Roulette (307)</option>
                     </select>
                 </div>
                 <button id="connectBtn">Conectar</button>
