@@ -8,3 +8,4 @@ brotli
 aiosqlite
 curl_cffi>=0.6.0
 cloudscraper==1.2.71
+flask-cors
