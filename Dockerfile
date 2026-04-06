@@ -1,20 +1,19 @@
-# Usa una imagen oficial de Python
-FROM python:3.11-slim
+FROM python:3.10-slim
 
-# Establece el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Copia el archivo de requerimientos primero para aprovechar la caché de Docker
-COPY requirements.txt .
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Instala las dependencias
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia el resto del código
 COPY main.py .
 
-# Expone el puerto que usará la aplicación (Render asigna el puerto real)
-EXPOSE 10000
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8000
 
-# Comando para ejecutar la aplicación
-CMD ["python", "main.py"]
+EXPOSE 8000
+
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
