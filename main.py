@@ -46,7 +46,7 @@ stats = {"requests": 0, "errors": 0, "blocked": 0, "last_id": None}
 def base_headers() -> dict:
     return {
         "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Encoding": "gzip, deflate",
         "Accept-Language": "es-ES,es;q=0.9",
         "Origin": "https://www.casino.org",
         "Referer": "https://www.casino.org/",
