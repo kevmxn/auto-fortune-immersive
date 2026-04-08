@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Roulette Docena Signal Bot - Sistema AMX V20 (Tendencia + Moderado)
-Incluye señales ALCISTAS y BAJISTAS.
+Estrategia de apuesta: Secuencia fija 2,6,18,54,162,486
+Restricciones endurecidas tras pérdida.
 """
 
 import asyncio
@@ -65,11 +66,14 @@ def dozen_change(num: int, last_dozen: Optional[int], last_d2_num: Optional[int]
         if last_dozen == 2: return 1 if (last_d2_num is not None and last_d2_num <= 18) else -1
     return 0
 
-# ─── DOZEN DATA (incluir aquí las tablas completas: AUTO, RUSSIAN, AZURE, SPEED1) ───
-DOZEN_DATA_AUTO = [ ... ]  # copia tus tablas completas
-DOZEN_DATA_RUSSIAN = [ ... ]
-DOZEN_DATA_AZURE = [ ... ]
-DOZEN_DATA_SPEED1 = [ ... ]
+# ─── DOZEN DATA COMPLETAS ─────────────────────────────────────────────────────
+DOZEN_DATA_AUTO = [{"id":0,"docena1":32,"docena2":44,"docena3":24,"probability":76,"senal":"DOCENA 1 y DOCENA 2"},{"id":1,"docena1":36,"docena2":40,"docena3":20,"probability":76,"senal":"DOCENA 1 y DOCENA 2"},{"id":2,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":3,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":4,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":5,"docena1":36,"docena2":32,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":6,"docena1":28,"docena2":32,"docena3":40,"probability":72,"senal":"DOCENA 2 y DOCENA 3"},{"id":7,"docena1":40,"docena2":20,"docena3":36,"probability":76,"senal":"DOCENA 1 y DOCENA 3"},{"id":8,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":9,"docena1":44,"docena2":24,"docena3":28,"probability":76,"senal":"DOCENA 1 y DOCENA 3"},{"id":10,"docena1":24,"docena2":36,"docena3":36,"probability":72,"senal":"DOCENA 2 y DOCENA 3"},{"id":11,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":12,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":13,"docena1":36,"docena2":28,"docena3":36,"probability":72,"senal":"DOCENA 1 y DOCENA 3"},{"id":14,"docena1":36,"docena2":40,"docena3":20,"probability":76,"senal":"DOCENA 1 y DOCENA 2"},{"id":15,"docena1":44,"docena2":32,"docena3":24,"probability":76,"senal":"DOCENA 1 y DOCENA 2"},{"id":16,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":17,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":18,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":19,"docena1":36,"docena2":28,"docena3":36,"probability":72,"senal":"DOCENA 1 y DOCENA 3"},{"id":20,"docena1":32,"docena2":32,"docena3":40,"probability":72,"senal":"DOCENA 1 y DOCENA 3"},{"id":21,"docena1":28,"docena2":32,"docena3":40,"probability":72,"senal":"DOCENA 2 y DOCENA 3"},{"id":22,"docena1":28,"docena2":36,"docena3":28,"probability":72,"senal":"DOCENA 1 y DOCENA 2"},{"id":23,"docena1":24,"docena2":36,"docena3":40,"probability":76,"senal":"DOCENA 2 y DOCENA 3"},{"id":24,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":25,"docena1":24,"docena2":32,"docena3":40,"probability":72,"senal":"DOCENA 2 y DOCENA 3"},{"id":26,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":27,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":28,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":29,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":30,"docena1":28,"docena2":32,"docena3":40,"probability":72,"senal":"DOCENA 2 y DOCENA 3"},{"id":31,"docena1":40,"docena2":24,"docena3":32,"probability":72,"senal":"DOCENA 1 y DOCENA 3"},{"id":32,"docena1":24,"docena2":32,"docena3":40,"probability":72,"senal":"DOCENA 2 y DOCENA 3"},{"id":33,"docena1":28,"docena2":36,"docena3":36,"probability":72,"senal":"DOCENA 2 y DOCENA 3"},{"id":34,"docena1":32,"docena2":24,"docena3":36,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":35,"docena1":32,"docena2":40,"docena3":24,"probability":72,"senal":"DOCENA 1 y DOCENA 2"},{"id":36,"docena1":36,"docena2":36,"docena3":24,"probability":72,"senal":"DOCENA 1 y DOCENA 2"}]
+
+DOZEN_DATA_RUSSIAN = [{"id":0,"docena1":32,"docena2":32,"docena3":32,"probability":32,"senal":"NO APOSTAR"},{"id":1,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":2,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":3,"docena1":24,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":4,"docena1":32,"docena2":40,"docena3":24,"probability":72,"senal":"DOCENA 1 y DOCENA 2"},{"id":5,"docena1":28,"docena2":40,"docena3":28,"probability":72,"senal":"DOCENA 1 y DOCENA 2"},{"id":6,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":7,"docena1":40,"docena2":28,"docena3":28,"probability":72,"senal":"DOCENA 1 y DOCENA 3"},{"id":8,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":9,"docena1":28,"docena2":40,"docena3":28,"probability":72,"senal":"DOCENA 1 y DOCENA 2"},{"id":10,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":11,"docena1":32,"docena2":28,"docena3":36,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":12,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":13,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":14,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":15,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":16,"docena1":32,"docena2":32,"docena3":32,"probability":32,"senal":"NO APOSTAR"},{"id":17,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":18,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":19,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":20,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":21,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":22,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":23,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":24,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":25,"docena1":32,"docena2":32,"docena3":32,"probability":32,"senal":"NO APOSTAR"},{"id":26,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":27,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":28,"docena1":32,"docena2":28,"docena3":36,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":29,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":30,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":31,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":32,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":33,"docena1":32,"docena2":28,"docena3":36,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":34,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":35,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":36,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"}]
+
+DOZEN_DATA_AZURE = [{"id":0,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":1,"docena1":24,"docena2":36,"docena3":40,"probability":76,"senal":"DOCENA 2 y DOCENA 3"},{"id":2,"docena1":36,"docena2":36,"docena3":28,"probability":72,"senal":"DOCENA 1 y DOCENA 2"},{"id":3,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":4,"docena1":36,"docena2":24,"docena3":36,"probability":72,"senal":"DOCENA 1 y DOCENA 3"},{"id":5,"docena1":32,"docena2":40,"docena3":24,"probability":72,"senal":"DOCENA 1 y DOCENA 2"},{"id":6,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":7,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":8,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":9,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":10,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":11,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":12,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":13,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":14,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":15,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":16,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":17,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":18,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":19,"docena1":32,"docena2":28,"docena3":36,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":20,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":21,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":22,"docena1":32,"docena2":28,"docena3":36,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":23,"docena1":24,"docena2":36,"docena3":40,"probability":76,"senal":"DOCENA 2 y DOCENA 3"},{"id":24,"docena1":32,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":25,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":26,"docena1":32,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":27,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":28,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":29,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":30,"docena1":32,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":31,"docena1":32,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":32,"docena1":32,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":33,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":34,"docena1":32,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":35,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":36,"docena1":28,"docena2":36,"docena3":36,"probability":72,"senal":"DOCENA 2 y DOCENA 3"}]
+
+DOZEN_DATA_SPEED1 = [{"id":0,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":1,"docena1":24,"docena2":40,"docena3":32,"probability":72,"senal":"DOCENA 2 y DOCENA 3"},{"id":2,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":3,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":4,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":5,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":6,"docena1":32,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":7,"docena1":36,"docena2":24,"docena3":36,"probability":72,"senal":"DOCENA 1 y DOCENA 3"},{"id":8,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":9,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":10,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":11,"docena1":32,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":12,"docena1":32,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":13,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":14,"docena1":36,"docena2":28,"docena3":32,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":15,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":16,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":17,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":18,"docena1":28,"docena2":40,"docena3":28,"probability":72,"senal":"DOCENA 1 y DOCENA 2"},{"id":19,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":20,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":21,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":22,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":23,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":24,"docena1":28,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":25,"docena1":28,"docena2":28,"docena3":40,"probability":72,"senal":"DOCENA 1 y DOCENA 3"},{"id":26,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":27,"docena1":32,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":28,"docena1":32,"docena2":36,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":29,"docena1":36,"docena2":32,"docena3":28,"probability":68,"senal":"DOCENA 1 y DOCENA 2"},{"id":30,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":31,"docena1":32,"docena2":28,"docena3":36,"probability":68,"senal":"DOCENA 1 y DOCENA 3"},{"id":32,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":33,"docena1":36,"docena2":36,"docena3":24,"probability":72,"senal":"DOCENA 1 y DOCENA 2"},{"id":34,"docena1":28,"docena2":36,"docena3":32,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":35,"docena1":32,"docena2":32,"docena3":36,"probability":68,"senal":"DOCENA 2 y DOCENA 3"},{"id":36,"docena1":28,"docena2":32,"docena3":40,"probability":72,"senal":"DOCENA 2 y DOCENA 3"}]
 
 # ─── ROULETTE CONFIGS ─────────────────────────────────────────────────────────
 ROULETTE_CONFIGS = {
@@ -101,49 +105,49 @@ ROULETTE_CONFIGS = {
 
 WS_URL     = "wss://dga.pragmaticplaylive.net/ws"
 CASINO_ID  = "ppcjd00000007254"
-MAX_ATTEMPTS = 2
-BASE_BET   = 0.10
+MAX_ATTEMPTS = 2          # Intentos por señal
+BASE_BET   = 0.10         # Unidad base (para el nivel 2 de la secuencia, realmente la secuencia está en múltiplos de esta unidad)
 VISIBLE    = 40
 
-# ─── LABOUCHÈRE ───────────────────────────────────────────────────────────────
-LABOUCHERE_INIT = [1, 1, 1, 1]
+# ─── ESTRATEGIA DE APUESTA: SECUENCIA FIJA 2,6,18,54,162,486 ──────────────────
+BET_SEQUENCE = [2, 6, 18, 54, 162, 486]  # en unidades de BASE_BET
 
-class Labouchere:
-    def __init__(self, init_seq: list, base: float):
-        self.init_seq  = init_seq[:]
-        self.base      = base
-        self.seq       = init_seq[:]
-        self.bankroll  = 0.0
+class FixedSequenceBetting:
+    def __init__(self, base: float, sequence: List[int]):
+        self.base = base
+        self.sequence = sequence
+        self.level = 0          # índice en la secuencia (0 = primer nivel)
+        self.bankroll = 0.0
 
-    def _ensure(self):
-        if not self.seq:
-            self.seq = self.init_seq[:]
-
-    def total_bet(self) -> float:
-        self._ensure()
-        units = self.seq[0] + (self.seq[-1] if len(self.seq) > 1 else self.seq[0])
-        return round(units * self.base, 2)
+    def current_bet_total(self) -> float:
+        """Devuelve la apuesta total para los dos docenas combinados."""
+        if self.level >= len(self.sequence):
+            self.level = 0
+        return round(self.sequence[self.level] * self.base, 2)
 
     def per_dozen_bet(self) -> float:
-        return round(self.total_bet() / 2, 2)
+        return round(self.current_bet_total() / 2, 2)
 
     def win(self) -> float:
-        bet = self.total_bet()
+        """Ganancia: se recupera la apuesta total más un beneficio igual a la mitad (pago 2:1 en dos docenas -> neto 1:2 del total)."""
+        bet = self.current_bet_total()
+        # Beneficio neto = bet * 0.5 (porque se apuesta a dos docenas, cada una paga 2:1)
         self.bankroll = round(self.bankroll + bet * 0.5, 2)
-        if len(self.seq) <= 2:
-            self.seq = []
-        else:
-            self.seq = self.seq[1:-1]
-        self._ensure()
+        self.level = 0   # reiniciar secuencia tras ganar
         return bet
 
     def loss(self) -> float:
-        bet = self.total_bet()
+        """Pérdida: se resta la apuesta total y se avanza al siguiente nivel."""
+        bet = self.current_bet_total()
         self.bankroll = round(self.bankroll - bet, 2)
-        added = max(1, round(bet / self.base))
-        if len(self.seq) < 8:
-            self.seq.append(added)
+        self.level += 1
+        if self.level >= len(self.sequence):
+            self.level = 0   # reiniciar si se supera el máximo (opcional)
         return bet
+
+    def is_recovery_mode(self) -> bool:
+        """Indica si estamos en modo recuperación (nivel > 0)."""
+        return self.level > 0
 
 
 # ─── SISTEMA AMX V20 PARA DOCENAS (CON BAJISTAS) ──────────────────────────────
@@ -169,7 +173,8 @@ class DozenAMXSignalSystem:
 
     # ─── ALCISTAS ─────────────────────────────────────────────────────────
     def check_signal_tendencia(self, level_data: list, dozen_data: list,
-                               current_number: int, prob_threshold: float) -> Optional[dict]:
+                               current_number: int, prob_threshold: float,
+                               require_strong: bool = False) -> Optional[dict]:
         if len(level_data) < 20:
             return None
 
@@ -190,6 +195,14 @@ class DozenAMXSignalSystem:
         cruce_alcista = ema4[-2] <= ema20[-2] and ema4[-1] > ema20[-1]
         sobre_tres_emas = current_pos > ema4[-1] and current_pos > ema8[-1] and current_pos > ema20[-1]
 
+        # Si se requiere señal fuerte (recuperación), exigir ambas condiciones
+        if require_strong:
+            if not (cruce_alcista and sobre_tres_emas):
+                return None
+        else:
+            if not (cruce_alcista or sobre_tres_emas):
+                return None
+
         entry = next((e for e in dozen_data if e["id"] == current_number), None)
         if not entry or entry["senal"] == "NO APOSTAR":
             return None
@@ -198,21 +211,20 @@ class DozenAMXSignalSystem:
         if prob < prob_threshold:
             return None
 
-        if cruce_alcista or sobre_tres_emas:
-            dozens = self._parse_dozens(entry["senal"])
-            return {
-                "type": "SKRILL_2.0",
-                "mode": "tendencia",
-                "dozens": dozens,
-                "probability": prob,
-                "trigger_number": current_number,
-                "strength": "strong" if cruce_alcista else "moderate",
-                "direction": "alcista"
-            }
-        return None
+        dozens = self._parse_dozens(entry["senal"])
+        return {
+            "type": "SKRILL_2.0",
+            "mode": "tendencia",
+            "dozens": dozens,
+            "probability": prob,
+            "trigger_number": current_number,
+            "strength": "strong" if cruce_alcista else "moderate",
+            "direction": "alcista"
+        }
 
     def check_signal_moderado(self, level_data: list, dozen_data: list,
-                              current_number: int, prob_threshold: float) -> Optional[dict]:
+                              current_number: int, prob_threshold: float,
+                              require_strong: bool = False) -> Optional[dict]:
         if len(level_data) < 20:
             return None
 
@@ -237,6 +249,14 @@ class DozenAMXSignalSystem:
             a, b, c = level_data[-3], level_data[-2], level_data[-1]
             patron_v = b < a and b < c and abs(a - c) <= 1 and c > a
 
+        if require_strong:
+            # En recuperación, requerir cruce + sobre_emas, o patrón V + sobre_emas
+            if not ((cruce_ema8 or patron_v) and sobre_emas):
+                return None
+        else:
+            if not ((cruce_ema8 or patron_v) and sobre_emas):
+                return None  # el moderado normal ya exige sobre_emas
+
         entry = next((e for e in dozen_data if e["id"] == current_number), None)
         if not entry or entry["senal"] == "NO APOSTAR":
             return None
@@ -245,22 +265,21 @@ class DozenAMXSignalSystem:
         if prob < prob_threshold:
             return None
 
-        if (cruce_ema8 or patron_v) and sobre_emas:
-            dozens = self._parse_dozens(entry["senal"])
-            return {
-                "type": "ALERTA_2.0",
-                "mode": "moderado",
-                "dozens": dozens,
-                "probability": prob,
-                "trigger_number": current_number,
-                "pattern": "V" if patron_v else "EMA_CROSS",
-                "direction": "alcista"
-            }
-        return None
+        dozens = self._parse_dozens(entry["senal"])
+        return {
+            "type": "ALERTA_2.0",
+            "mode": "moderado",
+            "dozens": dozens,
+            "probability": prob,
+            "trigger_number": current_number,
+            "pattern": "V" if patron_v else "EMA_CROSS",
+            "direction": "alcista"
+        }
 
     # ─── BAJISTAS ─────────────────────────────────────────────────────────
     def check_signal_tendencia_bajista(self, level_data: list, dozen_data: list,
-                                       current_number: int, prob_threshold: float) -> Optional[dict]:
+                                       current_number: int, prob_threshold: float,
+                                       require_strong: bool = False) -> Optional[dict]:
         if len(level_data) < 20:
             return None
 
@@ -281,6 +300,13 @@ class DozenAMXSignalSystem:
         cruce_bajista = ema4[-2] >= ema20[-2] and ema4[-1] < ema20[-1]
         bajo_tres_emas = current_pos < ema4[-1] and current_pos < ema8[-1] and current_pos < ema20[-1]
 
+        if require_strong:
+            if not (cruce_bajista and bajo_tres_emas):
+                return None
+        else:
+            if not (cruce_bajista or bajo_tres_emas):
+                return None
+
         entry = next((e for e in dozen_data if e["id"] == current_number), None)
         if not entry or entry["senal"] == "NO APOSTAR":
             return None
@@ -289,21 +315,20 @@ class DozenAMXSignalSystem:
         if prob < prob_threshold:
             return None
 
-        if cruce_bajista or bajo_tres_emas:
-            dozens = self._parse_dozens(entry["senal"])
-            return {
-                "type": "SKRILL_2.0_SHORT",
-                "mode": "tendencia",
-                "dozens": dozens,
-                "probability": prob,
-                "trigger_number": current_number,
-                "strength": "strong" if cruce_bajista else "moderate",
-                "direction": "bajista"
-            }
-        return None
+        dozens = self._parse_dozens(entry["senal"])
+        return {
+            "type": "SKRILL_2.0_SHORT",
+            "mode": "tendencia",
+            "dozens": dozens,
+            "probability": prob,
+            "trigger_number": current_number,
+            "strength": "strong" if cruce_bajista else "moderate",
+            "direction": "bajista"
+        }
 
     def check_signal_moderado_bajista(self, level_data: list, dozen_data: list,
-                                      current_number: int, prob_threshold: float) -> Optional[dict]:
+                                      current_number: int, prob_threshold: float,
+                                      require_strong: bool = False) -> Optional[dict]:
         if len(level_data) < 20:
             return None
 
@@ -328,6 +353,13 @@ class DozenAMXSignalSystem:
             a, b, c = level_data[-3], level_data[-2], level_data[-1]
             patron_v_inv = b > a and b > c and abs(a - c) <= 1 and c < a
 
+        if require_strong:
+            if not ((cruce_ema8_bajista or patron_v_inv) and bajo_emas):
+                return None
+        else:
+            if not ((cruce_ema8_bajista or patron_v_inv) and bajo_emas):
+                return None
+
         entry = next((e for e in dozen_data if e["id"] == current_number), None)
         if not entry or entry["senal"] == "NO APOSTAR":
             return None
@@ -336,18 +368,16 @@ class DozenAMXSignalSystem:
         if prob < prob_threshold:
             return None
 
-        if (cruce_ema8_bajista or patron_v_inv) and bajo_emas:
-            dozens = self._parse_dozens(entry["senal"])
-            return {
-                "type": "ALERTA_2.0_SHORT",
-                "mode": "moderado",
-                "dozens": dozens,
-                "probability": prob,
-                "trigger_number": current_number,
-                "pattern": "V_INV" if patron_v_inv else "EMA_CROSS",
-                "direction": "bajista"
-            }
-        return None
+        dozens = self._parse_dozens(entry["senal"])
+        return {
+            "type": "ALERTA_2.0_SHORT",
+            "mode": "moderado",
+            "dozens": dozens,
+            "probability": prob,
+            "trigger_number": current_number,
+            "pattern": "V_INV" if patron_v_inv else "EMA_CROSS",
+            "direction": "bajista"
+        }
 
     def _parse_dozens(self, senal: str) -> List[int]:
         dozens = []
@@ -423,13 +453,12 @@ class Stats:
         return w, l, t, e, bk24
 
 
-# ─── CHART GENERATION (CORREGIDO) ─────────────────────────────────────────────
+# ─── CHART GENERATION ─────────────────────────────────────────────────────────
 D_COLORS = {1: "#5bc8fa", 2: "#f0c040", 3: "#c0392b", 0: "#3fe06d"}
 D_LABELS = {1: "D1 (1-12)", 2: "D2 (13-24)", 3: "D3 (25-36)", 0: "0"}
 
 def generate_chart(level_data: list, spin_history: list,
                    signal_dozens: List[int], visible: int = VISIBLE) -> io.BytesIO:
-    # Asegurar misma longitud
     min_len = min(len(level_data), len(spin_history))
     level_data = level_data[-min_len:]
     spin_history = spin_history[-min_len:]
@@ -546,7 +575,7 @@ def tg_delete(chat_id, msg_id):
     _tg_call(bot.delete_message, chat_id=chat_id, message_id=msg_id)
 
 
-# ─── ROULETTE ENGINE (CON FORMATO CORREGIDO Y BAJISTAS) ───────────────────────
+# ─── ROULETTE ENGINE (CON NUEVA ESTRATEGIA Y RESTRICCIONES) ───────────────────
 class DozenEngine:
     def __init__(self, name: str, cfg: dict):
         self.name       = name
@@ -569,9 +598,9 @@ class DozenEngine:
         self.total_attempts: int        = 0
 
         self.result_until:  float = 0.0
-        self.consec_losses: int   = 0
 
-        self.lab = Labouchere(LABOUCHERE_INIT, BASE_BET)
+        # Sistema de apuestas con secuencia fija
+        self.bet_sys = FixedSequenceBetting(BASE_BET, BET_SEQUENCE)
 
         self.stats = Stats()
         self.signal_msg_id: Optional[int] = None
@@ -579,13 +608,19 @@ class DozenEngine:
         self.running = True
 
         self.amx_system = DozenAMXSignalSystem(mode="moderado")
-        self.min_prob_threshold = 68
-        self._last_amx_signal = None  # para reintentos
+        self.base_prob_threshold = 68
+        self._last_amx_signal = None
 
     def set_mode(self, mode: Literal["tendencia", "moderado"]):
         self.amx_system = DozenAMXSignalSystem(mode=mode)
         logger.info(f"[{self.name}] Modo AMX V20 cambiado a: {mode}")
         return mode
+
+    def _current_prob_threshold(self) -> int:
+        """Aumenta el umbral de probabilidad si estamos en recuperación."""
+        if self.bet_sys.is_recovery_mode():
+            return self.base_prob_threshold + 4  # 72% en lugar de 68%
+        return self.base_prob_threshold
 
     def process_number(self, number: int):
         real_dozen = REAL_DOZENS[number]
@@ -604,28 +639,28 @@ class DozenEngine:
             if real_dozen == 2:
                 self.last_d2_num = number
 
+        # Resolver señal activa
         if self.signal_active and time.time() > self.result_until:
             hit = real_dozen in self.signal_dozens
             if hit:
-                bet = self.lab.win()
-                self.stats.record(True, self.lab.bankroll)
+                bet = self.bet_sys.win()
+                self.stats.record(True, self.bet_sys.bankroll)
                 self.signal_active  = False
-                self.consec_losses  = 0
                 self._send_result(number, real_dozen, True, bet)
                 self._check_stats()
             else:
                 self.attempts_left -= 1
-                bet = self.lab.loss()
+                bet = self.bet_sys.loss()   # Aquí se descuenta y avanza nivel
                 if self.attempts_left <= 0:
-                    self.consec_losses = min(self.consec_losses + 1, 9)
-                    self.stats.record(False, self.lab.bankroll)
+                    self.stats.record(False, self.bet_sys.bankroll)
                     self.signal_active = False
                     self._send_result(number, real_dozen, False, bet)
                     self._check_stats()
                 else:
-                    new_bet = self.lab.total_bet()
-                    self._send_retry_signal(number, new_bet)
+                    new_bet_total = self.bet_sys.current_bet_total()
+                    self._send_retry_signal(number, new_bet_total)
 
+        # Activar nueva señal
         if not self.signal_active and time.time() > self.result_until:
             if len(self.level_data) < 20:
                 return
@@ -650,24 +685,31 @@ class DozenEngine:
         current_pos = self.level_data[-1]
         usar_bajista = current_pos < ema20[-1]
 
+        prob_threshold = self._current_prob_threshold()
+        require_strong = self.bet_sys.is_recovery_mode()  # más restrictivo si estamos en nivel >0
+
         signal = None
         if self.amx_system.mode == "tendencia":
             if usar_bajista:
                 signal = self.amx_system.check_signal_tendencia_bajista(
-                    self.level_data, self.dozen_data, current_number, self.min_prob_threshold
+                    self.level_data, self.dozen_data, current_number,
+                    prob_threshold, require_strong
                 )
             if not signal:
                 signal = self.amx_system.check_signal_tendencia(
-                    self.level_data, self.dozen_data, current_number, self.min_prob_threshold
+                    self.level_data, self.dozen_data, current_number,
+                    prob_threshold, require_strong
                 )
         else:
             if usar_bajista:
                 signal = self.amx_system.check_signal_moderado_bajista(
-                    self.level_data, self.dozen_data, current_number, self.min_prob_threshold
+                    self.level_data, self.dozen_data, current_number,
+                    prob_threshold, require_strong
                 )
             if not signal:
                 signal = self.amx_system.check_signal_moderado(
-                    self.level_data, self.dozen_data, current_number, self.min_prob_threshold
+                    self.level_data, self.dozen_data, current_number,
+                    prob_threshold, require_strong
                 )
         return signal
 
@@ -697,6 +739,10 @@ class DozenEngine:
             mode_name = "Tendencia" if amx_signal["mode"] == "tendencia" else "Moderado"
             tipo_senal = f"{dir_text} · {mode_name}"
 
+        recovery_note = ""
+        if self.bet_sys.is_recovery_mode():
+            recovery_note = f"\n⚠️ <i>Modo recuperación (nivel {self.bet_sys.level+1}/6)</i>"
+
         return (
             f"✅☑️ <b>SEÑAL CONFIRMADA</b> ☑️✅\n\n"
             f"🎰 <b>Juego: {self.name}</b>\n"
@@ -709,13 +755,13 @@ class DozenEngine:
         )
 
     def _send_signal(self, trigger: int, attempt: int, amx_signal: Optional[dict] = None):
-        bet_total = self.lab.total_bet()
-        bet_per   = self.lab.per_dozen_bet()
+        bet_total = self.bet_sys.current_bet_total()
+        bet_per   = self.bet_sys.per_dozen_bet()
         caption   = self._caption(trigger, attempt, bet_per, bet_total, self.signal_prob, amx_signal)
         chart  = generate_chart(self.level_data[:], self.spin_history[:], self.signal_dozens)
         msg_id = tg_send_photo(self.chat_id, self.thread_id, chart, caption)
         self.signal_msg_id = msg_id
-        logger.info(f"[{self.name}] Signal → {self.signal_dozens} after {trigger}, bet={bet_total:.2f}")
+        logger.info(f"[{self.name}] Signal → {self.signal_dozens} after {trigger}, bet={bet_total:.2f}, level={self.bet_sys.level+1}")
 
     def _send_retry_signal(self, trigger: int, new_bet_total: float):
         if self.signal_msg_id:
@@ -729,7 +775,7 @@ class DozenEngine:
         logger.info(f"[{self.name}] Retry signal → {self.signal_dozens} after {trigger}, bet={new_bet_total:.2f}")
 
     def _send_result(self, number: int, real_dozen: int, won: bool, bet: float):
-        bankroll = self.lab.bankroll
+        bankroll = self.bet_sys.bankroll
         d_icon = {1: "🔵", 2: "🟡", 3: "🔴", 0: "🟢"}.get(real_dozen, "⬜")
         d_name = {1: "Docena 1", 2: "Docena 2", 3: "Docena 3", 0: "Cero"}.get(real_dozen, "")
 
@@ -750,7 +796,7 @@ class DozenEngine:
     def _check_stats(self):
         if not self.stats.should_send_stats():
             return
-        bk = self.lab.bankroll
+        bk = self.bet_sys.bankroll
         w20, l20, t20, e20, batch_bk = self.stats.batch_stats(bk)
         self.stats.mark_stats_sent(bk)
         w24, l24, t24, e24, bk24 = self.stats.stats_24h(bk)
@@ -848,14 +894,15 @@ def cmd_start(message):
     help_text = """
 <b>🎰 Docena Bot - Sistema AMX V20</b>
 
-Comandos disponibles:
-/moderado - Activa modo MODERADO (EMA8/EMA20 + patrón V)
-/tendencia - Activa modo TENDENCIA (EMA4/EMA20 + momentum)
-/status - Muestra estado de todas las ruletas
-/reset - Resetea estadísticas
-/help - Muestra esta ayuda
+Comandos:
+/moderado - Modo MODERADO
+/tendencia - Modo TENDENCIA
+/status - Estado de ruletas
+/reset - Resetear estadísticas
+/help - Ayuda
 
-<b>NUEVO:</b> Ahora detecta señales BAJISTAS (short) automáticamente.
+<b>Estrategia:</b> Secuencia 2,6,18,54,162,486.
+Tras pérdida, condiciones más estrictas.
     """
     bot.reply_to(message, help_text, parse_mode="HTML")
 
@@ -898,7 +945,8 @@ def cmd_status(message):
     for name, engine in engines.items():
         mode_icon = "📈" if engine.amx_system.mode == "tendencia" else "📊"
         signal_status = "🟢" if engine.signal_active else "⚪"
-        lines.append(f"<b>{name}</b>: {mode_icon} {engine.amx_system.mode} {signal_status}")
+        level_info = f" (nivel {engine.bet_sys.level+1})" if engine.bet_sys.is_recovery_mode() else ""
+        lines.append(f"<b>{name}</b>: {mode_icon} {engine.amx_system.mode} {signal_status}{level_info}")
     bot.reply_to(message, "\n".join(lines), parse_mode="HTML")
 
 
@@ -906,7 +954,8 @@ def cmd_status(message):
 def cmd_reset(message):
     for engine in engines.values():
         engine.stats = Stats()
-    bot.reply_to(message, "🔄 <b>Estadísticas reseteadas</b>", parse_mode="HTML")
+        engine.bet_sys = FixedSequenceBetting(BASE_BET, BET_SEQUENCE)
+    bot.reply_to(message, "🔄 <b>Estadísticas y nivel de apuesta reseteados</b>", parse_mode="HTML")
 
 
 def run_flask():
@@ -928,7 +977,7 @@ async def main():
     tg_thread = threading.Thread(target=telegram_polling, daemon=True)
     tg_thread.start()
 
-    logger.info("🎰 Docena Bot AMX V20 iniciado")
+    logger.info("🎰 Docena Bot AMX V20 iniciado (Secuencia 2,6,18,54,162,486)")
     logger.info("Comandos: /moderado, /tendencia, /status, /reset, /help")
 
     await asyncio.gather(*tasks)
