@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Roulette Docena Signal Bot - AMX V20
-Señales: Breakout 1.50, Skrill 2.00, WT2.0, Momentum
-Diseño de mensajes con emojis y formato claro.
+Gestión de capital: Recuperación por niveles (hasta 5) con objetivo de +1 ficha
+Formato de señales personalizado.
 """
 
 import asyncio
@@ -14,7 +14,7 @@ import threading
 import time
 import urllib.request
 from collections import deque
-from typing import Optional, List, Literal, Dict, Any
+from typing import Optional, List, Literal
 
 import matplotlib
 matplotlib.use("Agg")
@@ -66,7 +66,7 @@ def dozen_change(num: int, last_dozen: Optional[int], last_d2_num: Optional[int]
         if last_dozen == 2: return 1 if (last_d2_num is not None and last_d2_num <= 18) else -1
     return 0
 
-# ─── DOZEN DATA (completa, extraída del código original) ─────────────────────
+# ─── DOZEN DATA COMPLETAS (37 registros cada una, según datos originales) ─────
 DOZEN_DATA_AUTO = [
     {"id":0,"docena1":32,"docena2":44,"docena3":24,"probability":76,"senal":"DOCENA 1 y DOCENA 2"},
     {"id":1,"docena1":36,"docena2":40,"docena3":20,"probability":76,"senal":"DOCENA 1 y DOCENA 2"},
@@ -258,62 +258,80 @@ ROULETTE_CONFIGS = {
 WS_URL     = "wss://dga.pragmaticplaylive.net/ws"
 CASINO_ID  = "ppcjd00000007254"
 MAX_ATTEMPTS = 2
-BASE_BET   = 0.10
+BASE_UNIT  = 0.10
 VISIBLE    = 40
 
-# ─── ESTRATEGIA DE APUESTA: SECUENCIA FIJA ─────────────────────────────────────
-BET_SEQUENCE = [2, 6, 18, 54, 162, 486]
-
-class FixedSequenceBetting:
-    def __init__(self, base: float, sequence: List[int]):
-        self.base = base
-        self.sequence = sequence
-        self.level = 0
+# ─── NUEVA GESTIÓN DE CAPITAL: RECUPERACIÓN POR NIVELES ───────────────────────
+class RecoveryBetting:
+    def __init__(self, base_unit: float):
+        self.base_unit = base_unit
+        self.sequences = {
+            1: (0.10, 0.30),
+            2: (0.20, 0.60),
+            3: (0.30, 0.90),
+            4: (0.40, 1.20),
+            5: (0.50, 1.50),
+        }
+        self.level = 1
+        self.attempt = 1
+        self.net_loss = 0.0
         self.bankroll = 0.0
 
+    def _current_bet_per_dozen(self) -> float:
+        n1, n2 = self.sequences[self.level]
+        return n1 if self.attempt == 1 else n2
+
     def current_bet_total(self) -> float:
-        if self.level >= len(self.sequence):
-            self.level = 0
-        return round(self.sequence[self.level] * self.base, 2)
+        return round(self._current_bet_per_dozen() * 2, 2)
 
     def per_dozen_bet(self) -> float:
-        return round(self.current_bet_total() / 2, 2)
-
-    def win(self) -> float:
-        bet = self.current_bet_total()
-        self.bankroll = round(self.bankroll + bet * 0.5, 2)
-        self.level = 0
-        return bet
-
-    def loss(self) -> float:
-        bet = self.current_bet_total()
-        self.bankroll = round(self.bankroll - bet, 2)
-        self.level += 1
-        if self.level >= len(self.sequence):
-            self.level = 0
-        return bet
+        return self._current_bet_per_dozen()
 
     def is_recovery_mode(self) -> bool:
-        return self.level > 0
+        return self.net_loss > 0 or self.level > 1
 
-# ─── SISTEMA AMX V20 (señales completas) ──────────────────────────────────────
+    def win(self) -> float:
+        bet_per = self._current_bet_per_dozen()
+        gain = bet_per
+        self.bankroll += gain
+        self.net_loss -= gain
+        if self.net_loss <= -self.base_unit:
+            self.level = 1
+            self.attempt = 1
+            self.net_loss = 0.0
+        else:
+            self.attempt = 1
+        return self.current_bet_total()
+
+    def loss(self) -> float:
+        bet_per = self._current_bet_per_dozen()
+        lost = bet_per * 2
+        self.bankroll -= lost
+        self.net_loss += lost
+        if self.attempt == 1:
+            self.attempt = 2
+        else:
+            if self.level < 5:
+                self.level += 1
+                self.attempt = 1
+            else:
+                self.level = 1
+                self.attempt = 1
+                self.net_loss = 0.0
+        return lost
+
+
+# ─── SISTEMA AMX V20 (SEÑALES) ────────────────────────────────────────────────
 class DozenAMXSignalSystem:
     def __init__(self, mode: Literal["tendencia", "moderado"] = "moderado"):
         self.mode = mode
         self.last_signal_time: float = 0
         self.cooldown_seconds: int = 8
         self.so_cooldown: Optional[float] = None
-
-        # Estado para WT2.0
         self._consolidation_active = False
         self._consolidation_level = 0.0
         self._consolidation_range_min = 0.0
         self._consolidation_range_max = 0.0
-        self._consolidation_start_time = 0.0
-
-        # Estado para Momentum
-        self._up_streak = 0
-        self._down_streak = 0
 
     @staticmethod
     def calculate_ema(data: list, period: int) -> list:
@@ -328,7 +346,6 @@ class DozenAMXSignalSystem:
             ema.append(prev)
         return ema
 
-    # ─── WT2.0 (consolidación) ─────────────────────────────────────────────
     def _update_consolidation(self, level_data: list) -> bool:
         if len(level_data) < 20:
             self._consolidation_active = False
@@ -345,7 +362,6 @@ class DozenAMXSignalSystem:
         rango = max(segment) - min(segment)
         es_horizontal = abs(pendiente) <= 0.15
         rango_controlado = rango <= 8
-
         if es_horizontal and rango_controlado:
             nivel_medio = sum(segment) / len(segment)
             if not self._consolidation_active or abs(nivel_medio - self._consolidation_level) > 1.5:
@@ -353,10 +369,9 @@ class DozenAMXSignalSystem:
                 self._consolidation_level = nivel_medio
                 self._consolidation_range_min = min(segment)
                 self._consolidation_range_max = max(segment)
-                self._consolidation_start_time = time.time()
             return True
         else:
-            if self._consolidation_active:
+            if self._consolidation_active and len(level_data) > 1:
                 ultimo = level_data[-1]
                 if ultimo < self._consolidation_range_min - 0.8 or ultimo > self._consolidation_range_max + 0.8:
                     self._consolidation_active = False
@@ -378,7 +393,6 @@ class DozenAMXSignalSystem:
                 return True
         return False
 
-    # ─── MOMENTUM ─────────────────────────────────────────────────────────
     def _update_momentum(self, level_data: list) -> Optional[Literal["up", "down"]]:
         if len(level_data) < 5:
             return None
@@ -409,7 +423,6 @@ class DozenAMXSignalSystem:
             return "up" if direction == 1 else "down"
         return None
 
-    # ─── SEÑALES ALCISTAS ─────────────────────────────────────────────────
     def check_breakout_150(self, level_data: list, current_number: int,
                            dozen_data: list, prob_threshold: float) -> Optional[dict]:
         if len(level_data) < 20:
@@ -475,7 +488,6 @@ class DozenAMXSignalSystem:
             "trigger_number": current_number,
         }
 
-    # ─── SEÑALES BAJISTAS ─────────────────────────────────────────────────
     def check_breakout_150_short(self, level_data: list, current_number: int,
                                  dozen_data: list, prob_threshold: float) -> Optional[dict]:
         if len(level_data) < 20:
@@ -590,8 +602,6 @@ class DozenAMXSignalSystem:
         tendencia_bajista = not tendencia_alcista
 
         signals = []
-
-        # WT2.0
         if tendencia_alcista:
             sig = self.check_wt20_signal(level_data, current_number, dozen_data, prob_threshold, "up")
             if sig: signals.append(sig)
@@ -599,18 +609,15 @@ class DozenAMXSignalSystem:
             sig = self.check_wt20_signal(level_data, current_number, dozen_data, prob_threshold, "down")
             if sig: signals.append(sig)
 
-        # Momentum
         sig = self.check_momentum_signal(level_data, current_number, dozen_data, prob_threshold)
         if sig: signals.append(sig)
 
-        # Skrill 2.0
         if tendencia_alcista:
             sig = self.check_skrill_200(level_data, current_number, dozen_data, prob_threshold, require_strong)
         else:
             sig = self.check_skrill_200_short(level_data, current_number, dozen_data, prob_threshold, require_strong)
         if sig: signals.append(sig)
 
-        # Breakout 1.50
         if not require_strong:
             if tendencia_alcista:
                 sig = self.check_breakout_150(level_data, current_number, dozen_data, prob_threshold)
@@ -819,7 +826,7 @@ def tg_delete(chat_id, msg_id):
     _tg_call(bot.delete_message, chat_id=chat_id, message_id=msg_id)
 
 
-# ─── ROULETTE ENGINE (CON NUEVO DISEÑO DE MENSAJE) ────────────────────────────
+# ─── ROULETTE ENGINE ──────────────────────────────────────────────────────────
 class DozenEngine:
     def __init__(self, name: str, cfg: dict):
         self.name       = name
@@ -844,7 +851,7 @@ class DozenEngine:
 
         self.result_until:  float = 0.0
 
-        self.bet_sys = FixedSequenceBetting(BASE_BET, BET_SEQUENCE)
+        self.bet_sys = RecoveryBetting(BASE_UNIT)
         self.stats = Stats()
         self.signal_msg_id: Optional[int] = None
         self.ws     = None
@@ -929,15 +936,21 @@ class DozenEngine:
             prob_threshold, require_strong
         )
 
+    # ─── FORMATO EXACTO DE LAS SEÑALES ───────────────────────────────────────
     def _dozen_str(self, dozens: List[int]) -> str:
+        """Devuelve, por ejemplo: D2 (13/24 (🔴)) + D3 (25/36 (🟡))"""
         parts = []
         for d in sorted(dozens):
-            if d == 1: parts.append("D1 (1-12)")
-            elif d == 2: parts.append("D2 (13-24)")
-            elif d == 3: parts.append("D3 (25-36)")
+            if d == 1:
+                parts.append("D1 (1/12 (🔵))")
+            elif d == 2:
+                parts.append("D2 (13/24 (🟡))")
+            elif d == 3:
+                parts.append("D3 (25/36 (🔴))")
         return " + ".join(parts)
 
     def _dozen_emoji(self, dozens: List[int]) -> str:
+        """Emojis separados por +, ej: 🔵 + 🟡"""
         emojis = []
         for d in sorted(dozens):
             if d == 1: emojis.append("🔵")
@@ -945,7 +958,6 @@ class DozenEngine:
             elif d == 3: emojis.append("🔴")
         return " + ".join(emojis)
 
-    # 🔥 NUEVO DISEÑO DE MENSAJE (exactamente como se pide)
     def _caption(self, trigger, attempt, bet_per, bet_total, prob, amx_signal: dict) -> str:
         docenas_text = self._dozen_str(self.signal_dozens)
         emoji_text   = self._dozen_emoji(self.signal_dozens)
@@ -956,7 +968,7 @@ class DozenEngine:
         tipo_senal = f"{dir_icon} {direction.capitalize()} · {mode_name}"
         recovery_note = ""
         if self.bet_sys.is_recovery_mode():
-            recovery_note = f"\n⚠️ <i>Modo recuperación (nivel {self.bet_sys.level+1}/6)</i>"
+            recovery_note = f"\n⚠️ <i>Modo recuperación (nivel {self.bet_sys.level})</i>"
         return (
             f"✅☑️ <b>SEÑAL CONFIRMADA</b> ☑️✅\n\n"
             f"🎰 <b>Juego: {self.name}</b>\n"
@@ -1108,8 +1120,7 @@ Comandos:
 /reset - Resetear estadísticas
 /help - Ayuda
 
-<b>Estrategia:</b> Secuencia 2,6,18,54,162,486.
-Tras pérdida, condiciones más estrictas.
+<b>Gestión de capital:</b> Recuperación por niveles (hasta 5). Objetivo: recuperar pérdidas + 1 ficha positiva.
     """
     bot.reply_to(message, help_text, parse_mode="HTML")
 
@@ -1147,7 +1158,7 @@ def cmd_status(message):
     for name, engine in engines.items():
         mode_icon = "📈" if engine.amx_system.mode == "tendencia" else "📊"
         signal_status = "🟢" if engine.signal_active else "⚪"
-        level_info = f" (nivel {engine.bet_sys.level+1})" if engine.bet_sys.is_recovery_mode() else ""
+        level_info = f" (nivel {engine.bet_sys.level})" if engine.bet_sys.is_recovery_mode() else ""
         lines.append(f"<b>{name}</b>: {mode_icon} {engine.amx_system.mode} {signal_status}{level_info}")
     bot.reply_to(message, "\n".join(lines), parse_mode="HTML")
 
@@ -1155,7 +1166,7 @@ def cmd_status(message):
 def cmd_reset(message):
     for engine in engines.values():
         engine.stats = Stats()
-        engine.bet_sys = FixedSequenceBetting(BASE_BET, BET_SEQUENCE)
+        engine.bet_sys = RecoveryBetting(BASE_UNIT)
     bot.reply_to(message, "🔄 <b>Estadísticas y nivel de apuesta reseteados</b>", parse_mode="HTML")
 
 
@@ -1177,7 +1188,7 @@ async def main():
     tg_thread = threading.Thread(target=telegram_polling, daemon=True)
     tg_thread.start()
 
-    logger.info("🎰 Docena Bot AMX V20 iniciado (Secuencia 2,6,18,54,162,486)")
+    logger.info("🎰 Docena Bot AMX V20 iniciado (Recuperación por niveles +1 ficha)")
     logger.info("Comandos: /moderado, /tendencia, /status, /reset, /help")
 
     await asyncio.gather(*tasks)
