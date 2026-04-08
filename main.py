@@ -2,7 +2,8 @@
 """
 Roulette Docena Signal Bot - AMX V20
 Gestión de capital: Recuperación por niveles (hasta 5) con objetivo de +1 ficha
-Formato de señales personalizado.
+Formato de señales: D1 (🔵) + D3 (🔴)
+Corregido: error "file must be non-empty" al enviar gráficos.
 """
 
 import asyncio
@@ -66,7 +67,7 @@ def dozen_change(num: int, last_dozen: Optional[int], last_d2_num: Optional[int]
         if last_dozen == 2: return 1 if (last_d2_num is not None and last_d2_num <= 18) else -1
     return 0
 
-# ─── DOZEN DATA COMPLETAS (37 registros cada una, según datos originales) ─────
+# ─── DOZEN DATA COMPLETAS (37 registros cada una) ─────────────────────────────
 DOZEN_DATA_AUTO = [
     {"id":0,"docena1":32,"docena2":44,"docena3":24,"probability":76,"senal":"DOCENA 1 y DOCENA 2"},
     {"id":1,"docena1":36,"docena2":40,"docena3":20,"probability":76,"senal":"DOCENA 1 y DOCENA 2"},
@@ -261,7 +262,7 @@ MAX_ATTEMPTS = 2
 BASE_UNIT  = 0.10
 VISIBLE    = 40
 
-# ─── NUEVA GESTIÓN DE CAPITAL: RECUPERACIÓN POR NIVELES ───────────────────────
+# ─── GESTIÓN DE CAPITAL: RECUPERACIÓN POR NIVELES ─────────────────────────────
 class RecoveryBetting:
     def __init__(self, base_unit: float):
         self.base_unit = base_unit
@@ -320,8 +321,7 @@ class RecoveryBetting:
                 self.net_loss = 0.0
         return lost
 
-
-# ─── SISTEMA AMX V20 (SEÑALES) ────────────────────────────────────────────────
+# ─── SISTEMA AMX V20 (SEÑALES) ───────────────────────────────────────────────
 class DozenAMXSignalSystem:
     def __init__(self, mode: Literal["tendencia", "moderado"] = "moderado"):
         self.mode = mode
@@ -643,7 +643,6 @@ class DozenAMXSignalSystem:
     def register_so_failed(self):
         self.so_cooldown = time.time()
 
-
 # ─── STATISTICS ───────────────────────────────────────────────────────────────
 class Stats:
     def __init__(self):
@@ -703,91 +702,136 @@ class Stats:
             bk24 = 0.0
         return w, l, t, e, bk24
 
-
-# ─── CHART GENERATION ─────────────────────────────────────────────────────────
+# ─── CHART GENERATION (SIEMPRE DEVUELVE UNA IMAGEN VÁLIDA) ────────────────────
 D_COLORS = {1: "#5bc8fa", 2: "#f0c040", 3: "#c0392b", 0: "#3fe06d"}
 D_LABELS = {1: "D1 (1-12)", 2: "D2 (13-24)", 3: "D3 (25-36)", 0: "0"}
 
 def generate_chart(level_data: list, spin_history: list,
                    signal_dozens: List[int], visible: int = VISIBLE) -> io.BytesIO:
-    min_len = min(len(level_data), len(spin_history))
-    level_data = level_data[-min_len:]
-    spin_history = spin_history[-min_len:]
+    # Si no hay suficientes datos, generar un gráfico simple de "esperando datos"
+    if len(level_data) < 3 or len(spin_history) < 3:
+        fig, ax = plt.subplots(figsize=(8, 3.6), facecolor="#0b101f")
+        ax.set_facecolor("#0f1a2a")
+        ax.text(0.5, 0.5, "⏳ Esperando datos suficientes...\n(se necesitan al menos 3 giros)",
+                transform=ax.transAxes, ha="center", va="center",
+                color="#8899bb", fontsize=12)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for sp in ["top", "right", "bottom", "left"]:
+            ax.spines[sp].set_visible(False)
+        buf = io.BytesIO()
+        plt.tight_layout(pad=0.8)
+        fig.savefig(buf, format="png", dpi=100, facecolor="#0b101f")
+        plt.close(fig)
+        buf.seek(0)
+        return buf
 
-    arr  = np.array(level_data, dtype=float)
-    n    = len(arr)
+    # Si hay datos, generar el gráfico normal
+    try:
+        min_len = min(len(level_data), len(spin_history))
+        level_data = level_data[-min_len:]
+        spin_history = spin_history[-min_len:]
 
-    def calc_ema(data, period):
-        if len(data) < period: return np.full(len(data), np.nan)
-        out  = np.full(len(data), np.nan)
-        mult = 2 / (period + 1)
-        out[period - 1] = np.mean(data[:period])
-        for i in range(period, len(data)):
-            out[i] = (data[i] - out[i - 1]) * mult + out[i - 1]
-        return out
+        arr = np.array(level_data, dtype=float)
+        n = len(arr)
 
-    e4  = calc_ema(arr, 4)
-    e8  = calc_ema(arr, 8)
-    e20 = calc_ema(arr, 20)
+        def calc_ema(data, period):
+            if len(data) < period:
+                return np.full(len(data), np.nan)
+            out = np.full(len(data), np.nan)
+            mult = 2 / (period + 1)
+            out[period - 1] = np.mean(data[:period])
+            for i in range(period, len(data)):
+                out[i] = (data[i] - out[i - 1]) * mult + out[i - 1]
+            return out
 
-    start   = max(0, n - visible)
-    sl      = slice(start, n)
-    x       = np.arange(len(arr[sl]))
-    hist_sl = spin_history[start:]
+        e4 = calc_ema(arr, 4)
+        e8 = calc_ema(arr, 8)
+        e20 = calc_ema(arr, 20)
 
-    if set(signal_dozens) == {1, 2}: sig_c = "#5bc8fa"
-    elif set(signal_dozens) == {2, 3}: sig_c = "#c0392b"
-    else: sig_c = "#f39c12"
+        start = max(0, n - visible)
+        sl = slice(start, n)
+        x = np.arange(len(arr[sl]))
+        hist_sl = spin_history[start:]
 
-    bg = "#0b101f"; ax_bg = "#0f1a2a"; grid_c = "#1e2e48"
+        if set(signal_dozens) == {1, 2}:
+            sig_c = "#5bc8fa"
+        elif set(signal_dozens) == {2, 3}:
+            sig_c = "#c0392b"
+        else:
+            sig_c = "#f39c12"
 
-    fig, ax = plt.subplots(figsize=(8, 3.6), facecolor=bg)
-    ax.set_facecolor(ax_bg)
+        bg = "#0b101f"
+        ax_bg = "#0f1a2a"
+        grid_c = "#1e2e48"
 
-    y   = arr[sl]
-    ax.fill_between(x, y, alpha=0.09, color=sig_c)
-    ax.plot(x, y,       color=sig_c,   linewidth=0.8, zorder=3)
-    ax.plot(x, e4[sl],  color="#ffd700", linewidth=0.7, linestyle="--", label="EMA 4",  zorder=4)
-    ax.plot(x, e8[sl],  color="#ff922b", linewidth=0.7, linestyle="--", label="EMA 8",  zorder=4)
-    ax.plot(x, e20[sl], color="#ff4d4d", linewidth=1.0, label="EMA 20", zorder=4)
+        fig, ax = plt.subplots(figsize=(8, 3.6), facecolor=bg)
+        ax.set_facecolor(ax_bg)
 
-    for i, spin in enumerate(hist_sl):
-        c = D_COLORS.get(spin["real_dozen"], "#ffffff")
-        ax.scatter(i, y[i], color=c, s=22, zorder=5, edgecolors="white", linewidths=0.3)
+        y = arr[sl]
+        ax.fill_between(x, y, alpha=0.09, color=sig_c)
+        ax.plot(x, y, color=sig_c, linewidth=0.8, zorder=3)
+        ax.plot(x, e4[sl], color="#ffd700", linewidth=0.7, linestyle="--", label="EMA 4", zorder=4)
+        ax.plot(x, e8[sl], color="#ff922b", linewidth=0.7, linestyle="--", label="EMA 8", zorder=4)
+        ax.plot(x, e20[sl], color="#ff4d4d", linewidth=1.0, label="EMA 20", zorder=4)
 
-    tick_step = max(1, len(x) // 8)
-    tick_x    = list(range(0, len(x), tick_step))
-    tick_lbs  = [str(hist_sl[i]["number"]) if i < len(hist_sl) else "" for i in tick_x]
-    ax.set_xticks(tick_x); ax.set_xticklabels(tick_lbs, color="#8899bb", fontsize=7)
-    ax.tick_params(axis="y", colors="#8899bb", labelsize=7)
-    ax.tick_params(axis="x", colors="#8899bb", labelsize=7)
-    for sp in ["top", "right"]: ax.spines[sp].set_visible(False)
-    ax.spines["bottom"].set_color(grid_c); ax.spines["left"].set_color(grid_c)
-    ax.grid(axis="y", color=grid_c, linewidth=0.4, alpha=0.5)
+        for i, spin in enumerate(hist_sl):
+            c = D_COLORS.get(spin.get("real_dozen", 0), "#ffffff")
+            ax.scatter(i, y[i], color=c, s=22, zorder=5, edgecolors="white", linewidths=0.3)
 
-    dozen_str = " + ".join(f"D{d}" for d in sorted(signal_dozens))
-    ax.set_title(f"🎯 Señal {dozen_str} — últimos {visible} giros · EMA 4/8/20",
-                 color=sig_c, fontsize=9, pad=6)
+        tick_step = max(1, len(x) // 8)
+        tick_x = list(range(0, len(x), tick_step))
+        tick_lbs = [str(hist_sl[i]["number"]) if i < len(hist_sl) else "" for i in tick_x]
+        ax.set_xticks(tick_x)
+        ax.set_xticklabels(tick_lbs, color="#8899bb", fontsize=7)
+        ax.tick_params(axis="y", colors="#8899bb", labelsize=7)
+        ax.tick_params(axis="x", colors="#8899bb", labelsize=7)
+        for sp in ["top", "right"]:
+            ax.spines[sp].set_visible(False)
+        ax.spines["bottom"].set_color(grid_c)
+        ax.spines["left"].set_color(grid_c)
+        ax.grid(axis="y", color=grid_c, linewidth=0.4, alpha=0.5)
 
-    legend_els = [
-        Line2D([0],[0], color=sig_c,    linewidth=0.8, label="Nivel"),
-        Line2D([0],[0], color="#ffd700", linewidth=0.7, linestyle="--", label="EMA 4"),
-        Line2D([0],[0], color="#ff922b", linewidth=0.7, linestyle="--", label="EMA 8"),
-        Line2D([0],[0], color="#ff4d4d", linewidth=1.0,  label="EMA 20"),
-        *[Line2D([0],[0], marker="o", color="w", markerfacecolor=D_COLORS[d],
-                 markersize=5, label=D_LABELS[d]) for d in [0, 1, 2, 3]],
-    ]
-    ax.legend(handles=legend_els, loc="upper left", fontsize=6.5,
-              facecolor="#0b101f", edgecolor=grid_c, labelcolor="white",
-              framealpha=0.8, ncol=2)
+        dozen_str = " + ".join(f"D{d}" for d in sorted(signal_dozens))
+        ax.set_title(f"🎯 Señal {dozen_str} — últimos {visible} giros · EMA 4/8/20",
+                     color=sig_c, fontsize=9, pad=6)
 
-    plt.tight_layout(pad=0.8)
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=120, facecolor=bg)
-    plt.close(fig)
-    buf.seek(0)
-    return buf
+        legend_els = [
+            Line2D([0], [0], color=sig_c, linewidth=0.8, label="Nivel"),
+            Line2D([0], [0], color="#ffd700", linewidth=0.7, linestyle="--", label="EMA 4"),
+            Line2D([0], [0], color="#ff922b", linewidth=0.7, linestyle="--", label="EMA 8"),
+            Line2D([0], [0], color="#ff4d4d", linewidth=1.0, label="EMA 20"),
+            *[Line2D([0], [0], marker="o", color="w", markerfacecolor=D_COLORS[d],
+                     markersize=5, label=D_LABELS[d]) for d in [0, 1, 2, 3]],
+        ]
+        ax.legend(handles=legend_els, loc="upper left", fontsize=6.5,
+                  facecolor="#0b101f", edgecolor=grid_c, labelcolor="white",
+                  framealpha=0.8, ncol=2)
 
+        plt.tight_layout(pad=0.8)
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=120, facecolor=bg)
+        plt.close(fig)
+        buf.seek(0)
+        return buf
+    except Exception as e:
+        logger.error(f"Error generando gráfico: {e}")
+        # Generar imagen de error
+        fig, ax = plt.subplots(figsize=(8, 3.6), facecolor="#0b101f")
+        ax.set_facecolor("#0f1a2a")
+        ax.text(0.5, 0.5, f"Error al generar gráfico\n{str(e)}",
+                transform=ax.transAxes, ha="center", va="center",
+                color="#ff8888", fontsize=10)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for sp in ["top", "right", "bottom", "left"]:
+            ax.spines[sp].set_visible(False)
+        buf = io.BytesIO()
+        plt.tight_layout(pad=0.8)
+        fig.savefig(buf, format="png", dpi=100, facecolor="#0b101f")
+        plt.close(fig)
+        buf.seek(0)
+        return buf
 
 # ─── TELEGRAM HELPERS ─────────────────────────────────────────────────────────
 _TG_MAX_RETRIES = 5
@@ -800,18 +844,25 @@ def _tg_call(fn, *args, **kwargs):
         except Exception as e:
             err = str(e)
             if "retry after" in err.lower():
-                try:    wait = int("".join(filter(str.isdigit, err))) + 1
-                except: wait = 30
+                try:
+                    wait = int("".join(filter(str.isdigit, err))) + 1
+                except:
+                    wait = 30
                 logger.warning(f"Flood-wait {wait}s")
-                time.sleep(wait); continue
+                time.sleep(wait)
+                continue
             logger.warning(f"TG error attempt {attempt}: {e}")
             if attempt < _TG_MAX_RETRIES:
-                time.sleep(delay); delay = min(delay * 2, 60)
+                time.sleep(delay)
+                delay = min(delay * 2, 60)
             else:
                 logger.error(f"TG failed after {_TG_MAX_RETRIES} attempts: {e}")
                 return None
 
 def tg_send_photo(chat_id, thread_id, buf, caption) -> Optional[int]:
+    if buf is None or buf.getbuffer().nbytes == 0:
+        logger.error("Buffer de imagen vacío, no se puede enviar")
+        return None
     buf.seek(0)
     msg = _tg_call(bot.send_photo, chat_id=chat_id, photo=buf, caption=caption,
                    parse_mode="HTML", message_thread_id=thread_id)
@@ -825,36 +876,35 @@ def tg_send_text(chat_id, thread_id, text) -> Optional[int]:
 def tg_delete(chat_id, msg_id):
     _tg_call(bot.delete_message, chat_id=chat_id, message_id=msg_id)
 
-
 # ─── ROULETTE ENGINE ──────────────────────────────────────────────────────────
 class DozenEngine:
     def __init__(self, name: str, cfg: dict):
-        self.name       = name
-        self.ws_key     = cfg["ws_key"]
-        self.chat_id    = cfg["chat_id"]
-        self.thread_id  = cfg["thread_id"]
+        self.name = name
+        self.ws_key = cfg["ws_key"]
+        self.chat_id = cfg["chat_id"]
+        self.thread_id = cfg["thread_id"]
         self.dozen_data = cfg["dozen_data"]
 
-        self.level_data:   list = []
+        self.level_data: list = []
         self.spin_history: list = []
-        self.last_dozen:   Optional[int] = None
-        self.last_d2_num:  Optional[int] = None
-        self.anti_block:   set  = set()
+        self.last_dozen: Optional[int] = None
+        self.last_d2_num: Optional[int] = None
+        self.anti_block: set = set()
 
-        self.signal_active:  bool       = False
-        self.signal_dozens:  List[int]  = []
-        self.signal_prob:    int        = 0
+        self.signal_active = False
+        self.signal_dozens: List[int] = []
+        self.signal_prob = 0
         self.trigger_number: Optional[int] = None
-        self.attempts_left:  int        = 0
-        self.total_attempts: int        = 0
+        self.attempts_left = 0
+        self.total_attempts = 0
         self.current_signal_info: Optional[dict] = None
 
-        self.result_until:  float = 0.0
+        self.result_until = 0.0
 
         self.bet_sys = RecoveryBetting(BASE_UNIT)
         self.stats = Stats()
         self.signal_msg_id: Optional[int] = None
-        self.ws     = None
+        self.ws = None
         self.running = True
 
         self.amx_system = DozenAMXSignalSystem(mode="moderado")
@@ -910,23 +960,23 @@ class DozenEngine:
                     new_bet_total = self.bet_sys.current_bet_total()
                     self._send_retry_signal(number, new_bet_total)
 
-        # Activar nueva señal
+        # Activar nueva señal (solo si hay suficientes datos)
         if not self.signal_active and time.time() > self.result_until:
-            if len(self.level_data) < 20:
+            if len(self.level_data) < 5:
                 return
             signal = self._detect_amx_signal()
             if signal:
                 self.current_signal_info = signal
-                self.signal_active   = True
-                self.signal_dozens   = signal["dozens"]
-                self.signal_prob     = signal["probability"]
-                self.trigger_number  = signal["trigger_number"]
-                self.attempts_left   = MAX_ATTEMPTS
-                self.total_attempts  = MAX_ATTEMPTS
+                self.signal_active = True
+                self.signal_dozens = signal["dozens"]
+                self.signal_prob = signal["probability"]
+                self.trigger_number = signal["trigger_number"]
+                self.attempts_left = MAX_ATTEMPTS
+                self.total_attempts = MAX_ATTEMPTS
                 self._send_signal(signal["trigger_number"], 1, amx_signal=signal)
 
     def _detect_amx_signal(self) -> Optional[dict]:
-        if len(self.level_data) < 20:
+        if len(self.level_data) < 5:
             return None
         current_number = self.spin_history[-1]["number"]
         prob_threshold = self._current_prob_threshold()
@@ -936,9 +986,7 @@ class DozenEngine:
             prob_threshold, require_strong
         )
 
-    # ─── FORMATO EXACTO DE LAS SEÑALES ───────────────────────────────────────
     def _dozen_str(self, dozens: List[int]) -> str:
-        """Devuelve, por ejemplo: D1 (🔵) + D3 (🔴)"""
         parts = []
         for d in sorted(dozens):
             if d == 1:
@@ -948,9 +996,9 @@ class DozenEngine:
             elif d == 3:
                 parts.append("D3 (🔴)")
         return " + ".join(parts)
-    
+
     def _caption(self, trigger, attempt, bet_per, bet_total, prob, amx_signal: dict) -> str:
-        docenas_text = self._dozen_str(self.signal_dozens)   # ← ahora incluye los emojis
+        docenas_text = self._dozen_str(self.signal_dozens)
         signal_name = amx_signal.get("signal_name", "Señal AMX")
         direction = amx_signal.get("direction", "alcista")
         dir_icon = "📈" if direction == "alcista" else "📉"
@@ -963,7 +1011,7 @@ class DozenEngine:
             f"✅☑️ <b>SEÑAL CONFIRMADA</b> ☑️✅\n\n"
             f"🎰 <b>Juego: {self.name}</b>\n"
             f"👉 <b>Después de: {trigger}</b>\n"
-            f"🎯 <b>Apostar a: {docenas_text}</b>\n\n"   # ← ya no se añade ({emoji_text})
+            f"🎯 <b>Apostar a: {docenas_text}</b>\n\n"
             f"💡 <i>Probabilidad de señal: {prob}%</i>\n"
             f"🌀 <i>Tipo de señal: {tipo_senal}</i>\n"
             f"📍 <i>Apuesta: {bet_per:.2f} usd | Total: {bet_total:.2f} usd</i>\n\n"
@@ -971,10 +1019,19 @@ class DozenEngine:
         )
 
     def _send_signal(self, trigger: int, attempt: int, amx_signal: dict):
+        # No enviar gráfico si hay muy pocos datos (evita buffer vacío)
+        if len(self.level_data) < 3 or len(self.spin_history) < 3:
+            logger.warning(f"[{self.name}] Datos insuficientes para gráfico, enviando solo texto")
+            caption = self._caption(trigger, attempt, self.bet_sys.per_dozen_bet(),
+                                    self.bet_sys.current_bet_total(), self.signal_prob, amx_signal)
+            msg_id = tg_send_text(self.chat_id, self.thread_id, caption)
+            self.signal_msg_id = msg_id
+            return
+
         bet_total = self.bet_sys.current_bet_total()
-        bet_per   = self.bet_sys.per_dozen_bet()
-        caption   = self._caption(trigger, attempt, bet_per, bet_total, self.signal_prob, amx_signal)
-        chart  = generate_chart(self.level_data[:], self.spin_history[:], self.signal_dozens)
+        bet_per = self.bet_sys.per_dozen_bet()
+        caption = self._caption(trigger, attempt, bet_per, bet_total, self.signal_prob, amx_signal)
+        chart = generate_chart(self.level_data[:], self.spin_history[:], self.signal_dozens)
         msg_id = tg_send_photo(self.chat_id, self.thread_id, chart, caption)
         self.signal_msg_id = msg_id
         logger.info(f"[{self.name}] Signal {amx_signal['signal_name']} {amx_signal['direction']} → {self.signal_dozens} after {trigger}, bet={bet_total:.2f}")
@@ -985,7 +1042,11 @@ class DozenEngine:
             self.signal_msg_id = None
         bet_per = round(new_bet_total / 2, 2)
         caption = self._caption(trigger, 2, bet_per, new_bet_total, self.signal_prob, self.current_signal_info)
-        chart  = generate_chart(self.level_data[:], self.spin_history[:], self.signal_dozens)
+        if len(self.level_data) < 3 or len(self.spin_history) < 3:
+            msg_id = tg_send_text(self.chat_id, self.thread_id, caption)
+            self.signal_msg_id = msg_id
+            return
+        chart = generate_chart(self.level_data[:], self.spin_history[:], self.signal_dozens)
         msg_id = tg_send_photo(self.chat_id, self.thread_id, chart, caption)
         self.signal_msg_id = msg_id
         logger.info(f"[{self.name}] Retry signal → {self.signal_dozens} after {trigger}, bet={new_bet_total:.2f}")
@@ -1027,45 +1088,55 @@ class DozenEngine:
                 async with websockets.connect(
                     WS_URL, ping_interval=30, ping_timeout=60, close_timeout=10
                 ) as ws:
-                    self.ws = ws; delay = 5
+                    self.ws = ws
+                    delay = 5
                     logger.info(f"[{self.name}] WS connected")
                     await ws.send(json.dumps({
                         "type": "subscribe", "casinoId": CASINO_ID,
                         "currency": "USD", "key": [self.ws_key]
                     }))
                     async for msg in ws:
-                        if not self.running: break
-                        try: data = json.loads(msg)
-                        except: continue
+                        if not self.running:
+                            break
+                        try:
+                            data = json.loads(msg)
+                        except:
+                            continue
 
                         if "last20Results" in data and isinstance(data["last20Results"], list):
                             tmp = []
                             for r in data["last20Results"]:
-                                gid = r.get("gameId"); num = r.get("result")
+                                gid = r.get("gameId")
+                                num = r.get("result")
                                 if gid and num is not None:
-                                    try: n = int(num)
-                                    except: continue
+                                    try:
+                                        n = int(num)
+                                    except:
+                                        continue
                                     if 0 <= n <= 36 and gid not in self.anti_block:
                                         tmp.append((gid, n))
-                                        if len(self.anti_block) > 1000: self.anti_block.clear()
+                                        if len(self.anti_block) > 1000:
+                                            self.anti_block.clear()
                                         self.anti_block.add(gid)
                             for _, n in reversed(tmp):
                                 self.process_number(n)
 
-                        gid = data.get("gameId"); res = data.get("result")
+                        gid = data.get("gameId")
+                        res = data.get("result")
                         if gid and res is not None:
-                            try: n = int(res)
-                            except: continue
+                            try:
+                                n = int(res)
+                            except:
+                                continue
                             if 0 <= n <= 36 and gid not in self.anti_block:
-                                if len(self.anti_block) > 1000: self.anti_block.clear()
+                                if len(self.anti_block) > 1000:
+                                    self.anti_block.clear()
                                 self.anti_block.add(gid)
                                 self.process_number(n)
-
             except Exception as e:
                 logger.warning(f"[{self.name}] WS error: {e}. Retry in {delay}s")
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 60)
-
 
 # ─── FLASK KEEPALIVE ──────────────────────────────────────────────────────────
 app = Flask(__name__)
@@ -1082,10 +1153,9 @@ def ping():
 def health():
     return jsonify({"healthy": True})
 
-
 async def self_ping_loop():
     port = int(os.environ.get("PORT", 10001))
-    url  = os.environ.get("RENDER_EXTERNAL_URL", f"http://localhost:{port}")
+    url = os.environ.get("RENDER_EXTERNAL_URL", f"http://localhost:{port}")
     while True:
         await asyncio.sleep(300)
         try:
@@ -1093,7 +1163,6 @@ async def self_ping_loop():
                 logger.info(f"Self-ping OK: {r.status}")
         except Exception as e:
             logger.warning(f"Self-ping failed: {e}")
-
 
 # ─── COMANDOS TELEGRAM ───────────────────────────────────────────────────────
 engines: dict[str, DozenEngine] = {}
@@ -1159,11 +1228,9 @@ def cmd_reset(message):
         engine.bet_sys = RecoveryBetting(BASE_UNIT)
     bot.reply_to(message, "🔄 <b>Estadísticas y nivel de apuesta reseteados</b>", parse_mode="HTML")
 
-
 def run_flask():
     port = int(os.environ.get("PORT", 10001))
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
-
 
 async def main():
     global engines
@@ -1182,7 +1249,6 @@ async def main():
     logger.info("Comandos: /moderado, /tendencia, /status, /reset, /help")
 
     await asyncio.gather(*tasks)
-
 
 if __name__ == "__main__":
     flask_thread = threading.Thread(target=run_flask, daemon=True)
