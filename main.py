@@ -938,29 +938,19 @@ class DozenEngine:
 
     # ─── FORMATO EXACTO DE LAS SEÑALES ───────────────────────────────────────
     def _dozen_str(self, dozens: List[int]) -> str:
-        """Devuelve, por ejemplo: D2 (13/24 (🔴)) + D3 (25/36 (🟡))"""
+        """Devuelve, por ejemplo: D1 (🔵) + D3 (🔴)"""
         parts = []
         for d in sorted(dozens):
             if d == 1:
-                parts.append("D1 (1/12 (🔵))")
+                parts.append("D1 (🔵)")
             elif d == 2:
-                parts.append("D2 (13/24 (🟡))")
+                parts.append("D2 (🟡)")
             elif d == 3:
-                parts.append("D3 (25/36 (🔴))")
+                parts.append("D3 (🔴)")
         return " + ".join(parts)
-
-    def _dozen_emoji(self, dozens: List[int]) -> str:
-        """Emojis separados por +, ej: 🔵 + 🟡"""
-        emojis = []
-        for d in sorted(dozens):
-            if d == 1: emojis.append("🔵")
-            elif d == 2: emojis.append("🟡")
-            elif d == 3: emojis.append("🔴")
-        return " + ".join(emojis)
-
+    
     def _caption(self, trigger, attempt, bet_per, bet_total, prob, amx_signal: dict) -> str:
-        docenas_text = self._dozen_str(self.signal_dozens)
-        emoji_text   = self._dozen_emoji(self.signal_dozens)
+        docenas_text = self._dozen_str(self.signal_dozens)   # ← ahora incluye los emojis
         signal_name = amx_signal.get("signal_name", "Señal AMX")
         direction = amx_signal.get("direction", "alcista")
         dir_icon = "📈" if direction == "alcista" else "📉"
@@ -973,7 +963,7 @@ class DozenEngine:
             f"✅☑️ <b>SEÑAL CONFIRMADA</b> ☑️✅\n\n"
             f"🎰 <b>Juego: {self.name}</b>\n"
             f"👉 <b>Después de: {trigger}</b>\n"
-            f"🎯 <b>Apostar a: {docenas_text} ({emoji_text})</b>\n\n"
+            f"🎯 <b>Apostar a: {docenas_text}</b>\n\n"   # ← ya no se añade ({emoji_text})
             f"💡 <i>Probabilidad de señal: {prob}%</i>\n"
             f"🌀 <i>Tipo de señal: {tipo_senal}</i>\n"
             f"📍 <i>Apuesta: {bet_per:.2f} usd | Total: {bet_total:.2f} usd</i>\n\n"
