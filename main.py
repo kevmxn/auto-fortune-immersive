@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
 Roulette Docena Signal Bot - AMX V20
-Gestión de capital: Recuperación por niveles (hasta 5) con objetivo de +1 ficha
-Formato de señales: D1 (🔵) + D3 (🔴)
-Corregido: error "file must be non-empty" al enviar gráficos.
+Gestión de capital por niveles, formato de señales personalizado.
+Versión con CONFIRMACIONES ADICIONALES para señales BAJISTAS en mercado volátil.
 """
 
 import asyncio
@@ -261,6 +260,7 @@ CASINO_ID  = "ppcjd00000007254"
 MAX_ATTEMPTS = 2
 BASE_UNIT  = 0.10
 VISIBLE    = 40
+VOLATILITY_THRESHOLD = 1.2   # Umbral de desviación estándar para considerar "muy volátil"
 
 # ─── GESTIÓN DE CAPITAL: RECUPERACIÓN POR NIVELES ─────────────────────────────
 class RecoveryBetting:
@@ -321,7 +321,7 @@ class RecoveryBetting:
                 self.net_loss = 0.0
         return lost
 
-# ─── SISTEMA AMX V20 (SEÑALES) ───────────────────────────────────────────────
+# ─── SISTEMA AMX V20 (CON CONFIRMACIONES ADICIONALES EN BAJISTAS) ─────────────
 class DozenAMXSignalSystem:
     def __init__(self, mode: Literal["tendencia", "moderado"] = "moderado"):
         self.mode = mode
@@ -346,6 +346,15 @@ class DozenAMXSignalSystem:
             ema.append(prev)
         return ema
 
+    @staticmethod
+    def calculate_volatility(level_data: list, window: int = 20) -> float:
+        """Desviación estándar de los últimos `window` valores."""
+        if len(level_data) < window:
+            return 0.0
+        segment = level_data[-window:]
+        return float(np.std(segment))
+
+    # ─── WT2.0 ─────────────────────────────────────────────────────────────
     def _update_consolidation(self, level_data: list) -> bool:
         if len(level_data) < 20:
             self._consolidation_active = False
@@ -383,22 +392,22 @@ class DozenAMXSignalSystem:
         if len(level_data) < 2:
             return False
         ultimo = level_data[-1]
-        if direction == "up":
-            if ultimo > self._consolidation_range_max + 0.2:
-                self._consolidation_active = False
-                return True
+        vol = self.calculate_volatility(level_data)
+        if direction == "down" and vol > VOLATILITY_THRESHOLD:
+            return ultimo < self._consolidation_range_min - 0.5
+        elif direction == "up":
+            return ultimo > self._consolidation_range_max + 0.2
         else:
-            if ultimo < self._consolidation_range_min - 0.2:
-                self._consolidation_active = False
-                return True
-        return False
+            return ultimo < self._consolidation_range_min - 0.2
 
-    def _update_momentum(self, level_data: list) -> Optional[Literal["up", "down"]]:
+    # ─── MOMENTUM ─────────────────────────────────────────────────────────
+    def _update_momentum(self, level_data: list, require_extra: bool = False) -> Optional[Literal["up", "down"]]:
         if len(level_data) < 5:
             return None
+        needed = 5 if require_extra else 4
         streak = 1
         direction = 0
-        for i in range(-4, -1):
+        for i in range(-needed, -1):
             diff = level_data[i+1] - level_data[i]
             if diff > 0:
                 if direction == -1:
@@ -419,10 +428,11 @@ class DozenAMXSignalSystem:
             else:
                 streak = 1
                 direction = 0
-        if streak >= 4:
+        if streak >= needed:
             return "up" if direction == 1 else "down"
         return None
 
+    # ─── SEÑALES ALCISTAS (sin cambios) ───────────────────────────────────
     def check_breakout_150(self, level_data: list, current_number: int,
                            dozen_data: list, prob_threshold: float) -> Optional[dict]:
         if len(level_data) < 20:
@@ -488,21 +498,32 @@ class DozenAMXSignalSystem:
             "trigger_number": current_number,
         }
 
+    # ─── SEÑALES BAJISTAS CON CONFIRMACIONES EXTRA EN VOLATILIDAD ──────────
     def check_breakout_150_short(self, level_data: list, current_number: int,
                                  dozen_data: list, prob_threshold: float) -> Optional[dict]:
         if len(level_data) < 20:
             return None
         ema4 = self.calculate_ema(level_data, 4)
         ema8 = self.calculate_ema(level_data, 8)
-        if None in (ema4[-1], ema8[-1], ema4[-2], ema8[-2]):
+        ema20 = self.calculate_ema(level_data, 20)
+        if None in (ema4[-1], ema8[-1], ema20[-1], ema4[-2], ema8[-2]):
             return None
-        cruce = ema4[-2] >= ema8[-2] and ema4[-1] < ema8[-1]
+        cruce_8 = ema4[-2] >= ema8[-2] and ema4[-1] < ema8[-1]
         resistencia = max(level_data[-20:]) if len(level_data) >= 20 else max(level_data)
         techo = (level_data[-1] >= resistencia * 0.99 and
                  level_data[-1] < ema4[-1] and
                  level_data[-1] < ema8[-1])
-        if not (cruce or techo):
-            return None
+        vol = self.calculate_volatility(level_data)
+        if vol > VOLATILITY_THRESHOLD:
+            if ema20[-1] is None or ema20[-2] is None:
+                return None
+            cruce_20 = ema4[-2] >= ema20[-2] and ema4[-1] < ema20[-1]
+            if not ((cruce_8 or techo) and cruce_20):
+                return None
+        else:
+            if not (cruce_8 or techo):
+                return None
+
         entry = next((e for e in dozen_data if e["id"] == current_number), None)
         if not entry or entry["senal"] == "NO APOSTAR" or entry["probability"] < prob_threshold:
             return None
@@ -521,26 +542,31 @@ class DozenAMXSignalSystem:
         if len(level_data) < 20:
             return None
         ema4 = self.calculate_ema(level_data, 4)
+        ema8 = self.calculate_ema(level_data, 8)
         ema20 = self.calculate_ema(level_data, 20)
-        if None in (ema4[-1], ema20[-1], ema4[-2], ema20[-2]):
+        if None in (ema4[-1], ema20[-1], ema8[-1], ema4[-2], ema20[-2]):
             return None
         cruce = ema4[-2] >= ema20[-2] and ema4[-1] < ema20[-1]
-        ema8 = self.calculate_ema(level_data, 8)
-        bajo_emas = False
-        if ema8[-1] is not None:
-            bajo_emas = (level_data[-1] < ema4[-1] and
-                         level_data[-1] < ema8[-1] and
-                         level_data[-1] < ema20[-1])
+        bajo_emas = (level_data[-1] < ema4[-1] and
+                     level_data[-1] < ema8[-1] and
+                     level_data[-1] < ema20[-1])
         dos_bajos = False
         if len(level_data) >= 3:
             dos_bajos = (level_data[-2] - level_data[-1] > 0.5 and
                          level_data[-3] - level_data[-2] > 0.5)
-        if require_strong:
-            if not (cruce or (bajo_emas and dos_bajos)):
+
+        vol = self.calculate_volatility(level_data)
+        if vol > VOLATILITY_THRESHOLD:
+            if not (cruce and bajo_emas):
                 return None
         else:
-            if not (cruce or bajo_emas or dos_bajos):
-                return None
+            if require_strong:
+                if not (cruce or (bajo_emas and dos_bajos)):
+                    return None
+            else:
+                if not (cruce or bajo_emas or dos_bajos):
+                    return None
+
         entry = next((e for e in dozen_data if e["id"] == current_number), None)
         if not entry or entry["senal"] == "NO APOSTAR" or entry["probability"] < prob_threshold:
             return None
@@ -572,7 +598,9 @@ class DozenAMXSignalSystem:
 
     def check_momentum_signal(self, level_data: list, current_number: int,
                               dozen_data: list, prob_threshold: float) -> Optional[dict]:
-        dir_mom = self._update_momentum(level_data)
+        vol = self.calculate_volatility(level_data)
+        require_extra = (vol > VOLATILITY_THRESHOLD)
+        dir_mom = self._update_momentum(level_data, require_extra)
         if dir_mom is None:
             return None
         entry = next((e for e in dozen_data if e["id"] == current_number), None)
@@ -816,7 +844,6 @@ def generate_chart(level_data: list, spin_history: list,
         return buf
     except Exception as e:
         logger.error(f"Error generando gráfico: {e}")
-        # Generar imagen de error
         fig, ax = plt.subplots(figsize=(8, 3.6), facecolor="#0b101f")
         ax.set_facecolor("#0f1a2a")
         ax.text(0.5, 0.5, f"Error al generar gráfico\n{str(e)}",
