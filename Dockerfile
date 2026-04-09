@@ -1,21 +1,30 @@
-# ── Docena Signal Bot — Dockerfile ────────────────────────────────────────────
-FROM python:3.10-slim
+# ── Roulette Signal Bot — Dockerfile ──────────────────────────────────────────
+FROM python:3.13-slim
 
+# Evita escritura de .pyc y asegura salida sin buffer
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Dependencias del sistema para matplotlib
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libfreetype6-dev libpng-dev pkg-config \
+    libfreetype6-dev \
+    libpng-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir \
-    pyTelegramBotAPI==4.21.0 \
-    websockets==12.0 \
-    flask==3.0.3 \
-    matplotlib==3.9.2 \
-    numpy==2.1.3
-
+# Directorio de trabajo
 WORKDIR /app
+
+# Instala dependencias de Python
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia el código principal
 COPY main.py .
 
-ENV PORT=10001
-EXPOSE 10001
+# Render asigna automáticamente la variable $PORT
+ENV PORT=10000
+EXPOSE 10000
 
+# Comando de inicio
 CMD ["python", "main.py"]
