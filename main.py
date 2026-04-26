@@ -1110,41 +1110,22 @@ class RouletteEngine:
                 self._send_signal(1, unified_prob)
 
     # ── WebSocket ─────────────────────────────────────────────────────────────
-    @staticmethod
-    def _extract_number(data: dict) -> Optional[int]:
-        """
-        Extrae el número del giro del payload WS de Pragmatic.
-        Muestra el payload crudo en consola si no puede extraerlo
-        para facilitar el diagnóstico.
-        """
-        # Buscar en claves directas conocidas
-        for key in ("result", "number", "outcome", "winningNumber",
-                    "winning_number", "slot", "rouletteResult"):
-            if key in data:
-                try:
-                    n = int(data[key])
-                    if 0 <= n <= 36:
-                        return n
-                except (TypeError, ValueError):
-                    pass
-
-        # Buscar recursivamente en sub-dicts de primer nivel
-        for val in data.values():
-            if isinstance(val, dict):
-                for key in ("result", "number", "outcome", "winningNumber",
-                            "winning_number", "slot"):
-                    if key in val:
-                        try:
-                            n = int(val[key])
-                            if 0 <= n <= 36:
-                                return n
-                        except (TypeError, ValueError):
-                            pass
-        return None
-
     async def run_ws(self):
-        reconnect_delay = 5
-        msg_count = 0
+        """
+        WS de Pragmatic — formato:
+        {
+          "totalSeatedPlayers": N,
+          "last20Results": [
+            {"result": "22", "color": "black", "gameId": "...", ...},
+            ...
+          ]
+        }
+        El primer elemento de last20Results es el giro más reciente.
+        Se usa gameId para evitar procesar el mismo giro dos veces.
+        """
+        reconnect_delay  = 5
+        last_game_id: Optional[str] = None
+
         while True:
             try:
                 async with websockets.connect(
@@ -1157,35 +1138,43 @@ class RouletteEngine:
                     }))
                     logger.info(f"[Mega] ✅ WS conectado — key={WS_KEY}")
                     reconnect_delay = 5
-                    msg_count = 0
 
                     async for raw in ws:
-                        msg_count += 1
                         try:
                             data = json.loads(raw)
                         except Exception:
                             continue
-
-                        # Log de diagnóstico: primeros 20 mensajes + cada msg sin número
-                        if msg_count <= 20:
-                            logger.info(f"[Mega] WS msg#{msg_count}: {str(data)[:200]}")
-
                         if not isinstance(data, dict):
                             continue
 
-                        number = self._extract_number(data)
+                        # Extraer el giro más reciente de last20Results
+                        results = data.get("last20Results")
+                        if not results or not isinstance(results, list):
+                            continue
 
-                        if number is None:
-                            # Solo loguear mensajes que parezcan contener resultado
-                            raw_str = str(data)
-                            if any(k in raw_str for k in ("result","number","outcome",
-                                                           "winning","roulette","spin")):
-                                logger.info(f"[Mega] ⚠️ Mensaje sin número parseable: {raw_str[:300]}")
+                        latest    = results[0]
+                        game_id   = str(latest.get("gameId", ""))
+                        result_str = latest.get("result", "")
+
+                        # Evitar duplicados — mismo gameId = mismo giro
+                        if game_id == last_game_id:
+                            continue
+                        last_game_id = game_id
+
+                        try:
+                            number = int(result_str)
+                        except (TypeError, ValueError):
+                            logger.warning(f"[Mega] No se pudo parsear result='{result_str}'")
+                            continue
+
+                        if not (0 <= number <= 36):
                             continue
 
                         real = REAL_COLOR_MAP.get(number, "VERDE")
-                        logger.info(f"[Mega] 🎰 Giro #{len(self.spin_history)+1}: "
-                                    f"{number} {real}")
+                        logger.info(
+                            f"[Mega] 🎰 Giro #{len(self.spin_history)+1}: "
+                            f"{number} {real} (gameId={game_id})"
+                        )
                         self.process_number(number)
 
             except Exception as e:
