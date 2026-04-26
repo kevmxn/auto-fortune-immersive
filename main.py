@@ -1110,38 +1110,91 @@ class RouletteEngine:
                 self._send_signal(1, unified_prob)
 
     # ── WebSocket ─────────────────────────────────────────────────────────────
+    @staticmethod
+    def _extract_number(data: dict) -> Optional[int]:
+        """
+        Extrae el número del giro del payload WS de Pragmatic.
+        Muestra el payload crudo en consola si no puede extraerlo
+        para facilitar el diagnóstico.
+        """
+        # Buscar en claves directas conocidas
+        for key in ("result", "number", "outcome", "winningNumber",
+                    "winning_number", "slot", "rouletteResult"):
+            if key in data:
+                try:
+                    n = int(data[key])
+                    if 0 <= n <= 36:
+                        return n
+                except (TypeError, ValueError):
+                    pass
+
+        # Buscar recursivamente en sub-dicts de primer nivel
+        for val in data.values():
+            if isinstance(val, dict):
+                for key in ("result", "number", "outcome", "winningNumber",
+                            "winning_number", "slot"):
+                    if key in val:
+                        try:
+                            n = int(val[key])
+                            if 0 <= n <= 36:
+                                return n
+                        except (TypeError, ValueError):
+                            pass
+        return None
+
     async def run_ws(self):
         reconnect_delay = 5
+        msg_count = 0
         while True:
             try:
                 async with websockets.connect(
                     WS_URL, ping_interval=30, ping_timeout=60, close_timeout=10
                 ) as ws:
                     await ws.send(json.dumps({
-                        "type":"subscribe","key":WS_KEY,"casinoId":CASINO_ID
+                        "type": "subscribe",
+                        "key":  WS_KEY,
+                        "casinoId": CASINO_ID,
                     }))
-                    logger.info("[Mega] ✅ WS conectado")
+                    logger.info(f"[Mega] ✅ WS conectado — key={WS_KEY}")
                     reconnect_delay = 5
+                    msg_count = 0
+
                     async for raw in ws:
+                        msg_count += 1
                         try:
                             data = json.loads(raw)
                         except Exception:
                             continue
-                        if not isinstance(data, dict): continue
-                        number = None
-                        for key in ("result","number","outcome"):
-                            if key in data:
-                                try: number = int(data[key])
-                                except: pass
-                                break
-                        if number is not None and 0 <= number <= 36:
-                            self.process_number(number)
+
+                        # Log de diagnóstico: primeros 20 mensajes + cada msg sin número
+                        if msg_count <= 20:
+                            logger.info(f"[Mega] WS msg#{msg_count}: {str(data)[:200]}")
+
+                        if not isinstance(data, dict):
+                            continue
+
+                        number = self._extract_number(data)
+
+                        if number is None:
+                            # Solo loguear mensajes que parezcan contener resultado
+                            raw_str = str(data)
+                            if any(k in raw_str for k in ("result","number","outcome",
+                                                           "winning","roulette","spin")):
+                                logger.info(f"[Mega] ⚠️ Mensaje sin número parseable: {raw_str[:300]}")
+                            continue
+
+                        real = REAL_COLOR_MAP.get(number, "VERDE")
+                        logger.info(f"[Mega] 🎰 Giro #{len(self.spin_history)+1}: "
+                                    f"{number} {real}")
+                        self.process_number(number)
+
             except Exception as e:
                 logger.warning(f"[Mega] WS desconectado: {e}. Recon en {reconnect_delay}s")
                 try:
                     tg_send(f"⚠️ <b>Mega Roulette</b> — Conexión perdida. "
                             f"Reconectando en {reconnect_delay}s...")
-                except Exception: pass
+                except Exception:
+                    pass
                 await asyncio.sleep(reconnect_delay)
                 reconnect_delay = min(reconnect_delay * 2, 60)
 
