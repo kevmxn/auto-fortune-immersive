@@ -2,13 +2,13 @@
 """
 Speed Roulette Stats Server — Recopilador Multi-Ruleta y Servidor WebSocket
 ===========================================================================
-  - Usa aiohttp: HTTP + WebSocket en el MISMO puerto (elimina error HEAD).
+  - Usa aiohttp: HTTP + WebSocket en el MISMO puerto.
   - Se conecta a 7 ruletas Pragmatic Play simultáneamente.
   - Los clientes (bots) se SUSCRIBEN a una ruleta específica.
   - Solo recibe actualizaciones de la ruleta a la que está suscrito.
   - Estadísticas HISTÓRICAS ACUMULADAS (no se borran).
   - Últimos 200 giros por ruleta (rotativos).
-  - Self-ping para Render.
+  - Self-ping asíncrono para Render.
 """
 
 import asyncio
@@ -17,7 +17,6 @@ import logging
 import os
 import sqlite3
 import time
-import urllib.request
 from collections import defaultdict
 from typing import Optional, Dict, List
 
@@ -105,30 +104,24 @@ class StatsEngine:
                 logger.info(f"[{roulette}] Sin datos previos")
 
     def process_spin(self, roulette: str, number: int, game_id: str):
-        """Procesar un nuevo giro, actualizar DB y estadísticas."""
         exists = self.db.execute("SELECT 1 FROM spins WHERE game_id=?", (game_id,)).fetchone()
         if exists:
             return
 
         ts = int(time.time())
-
-        # 1. Insertar giro
         self.db.execute(
             "INSERT INTO spins(roulette, game_id, number, ts) VALUES(?,?,?,?)",
             (roulette, game_id, number, ts)
         )
 
-        # 2. Actualizar estadísticas de transición
         prev_num = self.last_numbers.get(roulette)
         if prev_num is not None:
             d = get_dozen(number)
             c = get_column(number)
-
             self.db.execute(
                 "INSERT OR IGNORE INTO transitions(roulette, from_number) VALUES(?,?)",
                 (roulette, prev_num)
             )
-
             d_col = f"d{d}"
             c_col = f"c{c}"
             self.db.execute(f"""
@@ -140,12 +133,8 @@ class StatsEngine:
             """, (roulette, prev_num))
 
         self.db.commit()
-
-        # 3. Actualizar último número en memoria
         self.last_numbers[roulette] = number
         self.last_game_ids[roulette] = game_id
-
-        # 4. Limpiar giros antiguos
         self._cleanup_old_spins(roulette)
 
     def _cleanup_old_spins(self, roulette: str):
@@ -170,7 +159,6 @@ class StatsEngine:
         return row["cnt"] if row else 0
 
     def get_stats_table(self, roulette: str, cat_type: str) -> Dict[str, Dict]:
-        """Obtener tabla de estadísticas completa (0-36)."""
         rows = self.db.execute(
             "SELECT * FROM transitions WHERE roulette=?", (roulette,)
         ).fetchall()
@@ -205,11 +193,9 @@ class StatsEngine:
                     "zero": round(c0 / total * 100, 1),
                     "total": total
                 }
-
         return result
 
     def get_full_state(self, roulette: str) -> dict:
-        """Obtener el estado completo para enviar al bot."""
         return {
             "roulette": roulette,
             "roulette_name": ROULETTES.get(roulette, {}).get("name", roulette),
@@ -233,7 +219,6 @@ class StatsEngine:
             logger.info(f"🔌 Cliente desuscrito de {sub}")
 
     async def broadcast_update(self, roulette: str, number: int):
-        """Enviar actualización SOLO a clientes suscritos a esta ruleta."""
         if not self.client_subscriptions:
             return
 
@@ -264,9 +249,8 @@ class StatsEngine:
 # ─── INSTANCIA GLOBAL ─────────────────────────────────────────────────────────
 stats_engine = StatsEngine()
 
-# ─── HANDLERS HTTP (aiohttp) ──────────────────────────────────────────────────
+# ─── HANDLERS HTTP ────────────────────────────────────────────────────────────
 async def handle_home(request):
-    """GET / — Estado general del servidor."""
     roulettes_status = {}
     for r_key, r_conf in ROULETTES.items():
         roulettes_status[r_key] = {
@@ -282,32 +266,27 @@ async def handle_home(request):
     })
 
 async def handle_ping(request):
-    """GET /ping — Keep-alive para Render."""
     return web.json_response({"status": "pong", "ts": time.time()})
 
 async def handle_health(request):
-    """GET /health — Estado de todas las ruletas."""
     return web.json_response({
         "status": "ok",
         "roulettes": {r: stats_engine.get_total_spins(r) for r in ROULETTES}
     })
 
 async def handle_stats_dozen(request):
-    """GET /stats/{roulette}/dozen — Tabla de docenas."""
     roulette = request.match_info.get("roulette", "").upper()
     if roulette not in ROULETTES:
         return web.json_response({"error": f"Ruleta no encontrada. Disponibles: {list(ROULETTES.keys())}"}, status=404)
     return web.json_response(stats_engine.get_stats_table(roulette, "DOCENA"))
 
 async def handle_stats_column(request):
-    """GET /stats/{roulette}/column — Tabla de columnas."""
     roulette = request.match_info.get("roulette", "").upper()
     if roulette not in ROULETTES:
         return web.json_response({"error": f"Ruleta no encontrada. Disponibles: {list(ROULETTES.keys())}"}, status=404)
     return web.json_response(stats_engine.get_stats_table(roulette, "COLUMNA"))
 
 async def handle_spins(request):
-    """GET /spins/{roulette}/{n} — Últimos N giros."""
     roulette = request.match_info.get("roulette", "").upper()
     if roulette not in ROULETTES:
         return web.json_response({"error": f"Ruleta no encontrada. Disponibles: {list(ROULETTES.keys())}"}, status=404)
@@ -318,15 +297,13 @@ async def handle_spins(request):
     return web.json_response(stats_engine.get_last_n_spins(roulette, n))
 
 
-# ─── HANDLER WEBSOCKET (aiohttp) ─────────────────────────────────────────────
+# ─── HANDLER WEBSOCKET ────────────────────────────────────────────────────────
 async def handle_websocket(request):
-    """WebSocket endpoint — Los bots se conectan aquí."""
     ws = aiohttp.web.WebSocketResponse()
     await ws.prepare(request)
     
-    logger.info(f"🔗 Nuevo cliente WebSocket conectado")
+    logger.info("🔗 Nuevo cliente WebSocket conectado")
     
-    # Enviar lista de ruletas disponibles
     available = {k: v["name"] for k, v in ROULETTES.items()}
     await ws.send_str(json.dumps({
         "type": "welcome",
@@ -384,7 +361,6 @@ async def handle_websocket(request):
 
 # ─── CLIENTE PRAGMATIC PLAY ──────────────────────────────────────────────────
 async def connect_pragmatic(roulette_key: str, roulette_config: dict):
-    """Conectar a Pragmatic Play y recibir giros para una ruleta."""
     key = roulette_config["key"]
     name = roulette_config["name"]
     reconnect_delay = 5
@@ -414,7 +390,6 @@ async def connect_pragmatic(roulette_key: str, roulette_config: dict):
                     if not isinstance(data, dict):
                         continue
                     
-                    # Procesar lote inicial/actualización
                     results = data.get("last20Results")
                     if results and isinstance(results, list):
                         for result in reversed(results):
@@ -430,7 +405,6 @@ async def connect_pragmatic(roulette_key: str, roulette_config: dict):
                                 pass
                         continue
                     
-                    # Procesar resultado individual
                     for res_key in ("result", "number", "outcome", "winningNumber"):
                         if res_key in data:
                             gid = str(data.get("gameId", f"{roulette_key}_{int(time.time()*1000)}"))
@@ -449,39 +423,40 @@ async def connect_pragmatic(roulette_key: str, roulette_config: dict):
             reconnect_delay = min(reconnect_delay * 2, 60)
 
 
-# ─── SELF-PING ────────────────────────────────────────────────────────────────
+# ─── SELF-PING ASÍNCRONO ─────────────────────────────────────────────────────
 async def self_ping_loop():
-    url = RENDER_EXTERNAL_URL.rstrip("/")
+    url = os.environ.get("RENDER_EXTERNAL_URL", RENDER_EXTERNAL_URL).rstrip("/")
     if not url:
         logger.info("⚠️ RENDER_EXTERNAL_URL no configurada. Self-ping desactivado.")
         return
     await asyncio.sleep(30)
-    while True:
-        try:
-            urllib.request.urlopen(f"{url}/ping", timeout=15)
-            logger.debug("Self-ping exitoso")
-        except Exception as e:
-            logger.warning(f"Self-ping falló: {e}")
-        await asyncio.sleep(240)
+    
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(f"{url}/ping", timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        logger.info("✅ Self-ping exitoso")
+                    else:
+                        logger.warning(f"⚠️ Self-ping status: {resp.status}")
+            except Exception as e:
+                logger.warning(f"⚠️ Self-ping falló: {e}")
+            await asyncio.sleep(240)
 
 
 # ─── TAREAS EN SEGUNDO PLANO ──────────────────────────────────────────────────
 async def start_background_tasks(app):
-    """Iniciar todas las tareas en segundo plano cuando arranca el servidor."""
-    # Conectar a todas las ruletas
     for roulette_key, roulette_config in ROULETTES.items():
         app[f"task_{roulette_key}"] = asyncio.create_task(
             connect_pragmatic(roulette_key, roulette_config)
         )
-        await asyncio.sleep(0.3)  # Escalonar conexiones
+        await asyncio.sleep(0.3)
     
-    # Self-ping
     app["task_ping"] = asyncio.create_task(self_ping_loop())
     
     logger.info(f"🎰 {len(ROULETTES)} tareas de recopilación iniciadas")
 
 async def cleanup_background_tasks(app):
-    """Limpiar tareas al cerrar el servidor."""
     for key in list(app.keys()):
         if key.startswith("task_"):
             app[key].cancel()
@@ -493,21 +468,16 @@ async def cleanup_background_tasks(app):
 
 # ─── APLICACIÓN PRINCIPAL ─────────────────────────────────────────────────────
 def create_app():
-    """Crear y configurar la aplicación aiohttp."""
     app = web.Application()
     
-    # ─── Rutas HTTP ────────────────────────────────────────────────
     app.router.add_get("/", handle_home)
     app.router.add_get("/ping", handle_ping)
     app.router.add_get("/health", handle_health)
     app.router.add_get("/stats/{roulette}/dozen", handle_stats_dozen)
     app.router.add_get("/stats/{roulette}/column", handle_stats_column)
     app.router.add_get("/spins/{roulette}/{n}", handle_spins)
-    
-    # ─── Ruta WebSocket ────────────────────────────────────────────
     app.router.add_get("/ws", handle_websocket)
     
-    # ─── Tareas en segundo plano ──────────────────────────────────
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)
     
