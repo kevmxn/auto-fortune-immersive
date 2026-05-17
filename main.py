@@ -123,17 +123,23 @@ class StatsEngine:
         self.last_numbers: Dict[str, Optional[int]] = {r: None for r in ROULETTES}
         self.last_game_ids: Dict[str, str] = {r: "" for r in ROULETTES}
         self.client_subscriptions: Dict = {}
-        asyncio.create_task(self._load_last_states())
+        self._load_last_states()  # Llamada síncrona
 
-    async def _load_last_states(self):
-        for roulette in ROULETTES:
-            row = await db_pool.execute_single("SELECT number, game_id FROM spins WHERE roulette=? ORDER BY id DESC LIMIT 1", (roulette,))
-            if row: 
-                self.last_numbers[roulette] = row["number"]
-                self.last_game_ids[roulette] = row["game_id"]
-                logger.info(f"[{roulette}] Último: #{row['number']}")
-            else: 
-                logger.info(f"[{roulette}] Sin datos")
+    def _load_last_states(self):
+        """Load last states from database (synchronous)"""
+        conn = sqlite3.connect(db_pool.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            for roulette in ROULETTES:
+                row = conn.execute("SELECT number, game_id FROM spins WHERE roulette=? ORDER BY id DESC LIMIT 1", (roulette,)).fetchone()
+                if row: 
+                    self.last_numbers[roulette] = row["number"]
+                    self.last_game_ids[roulette] = row["game_id"]
+                    logger.info(f"[{roulette}] Último: #{row['number']}")
+                else: 
+                    logger.info(f"[{roulette}] Sin datos")
+        finally:
+            conn.close()
 
     async def process_spin(self, roulette: str, number: int, game_id: str) -> bool:
         # Verificar duplicado
