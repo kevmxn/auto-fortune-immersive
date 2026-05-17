@@ -30,7 +30,7 @@ for _ln in ['aiohttp.access', 'aiohttp.server', 'urllib3']:
 
 WS_URL_PRAGMATIC = "wss://dga.pragmaticplaylive.net/ws"
 CASINO_ID = "ppcjd00000007254"
-RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "https://ruletasbot-rjce.onrender.com")
+RENDER_EXTERNAL_URL = "https://ruletasbot-rjce.onrender.com"
 
 ROULETTES = {
     "SPEED1":    {"key": 203, "name": "Speed Roulette 1"},
