@@ -76,7 +76,7 @@ class DBPool:
         )""")
         conn.commit()
         conn.close()
-        logger.info(f"✅ DB initialized: {db_path}")
+        logger.info(f"✅ DB initialized: {self.db_path}")
     
     async def execute(self, query: str, params: tuple = ()):
         """Thread-safe async execute"""
