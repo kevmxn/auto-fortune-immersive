@@ -1,0 +1,127 @@
+name: Build Spaceman APK APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Localizar el proyecto Android (suelto o dentro de un .zip)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Un proyecto válido = settings.gradle.kts + app/build.gradle.kts con el namespace de esta app.
+          # (Así no se confunde con otros proyectos del repo, p. ej. Trading Pengüi 22.)
+          is_mine() {
+            [[ -f "$1/settings.gradle.kts" && -f "$1/app/build.gradle.kts" ]] \
+              && grep -q "com.spaceman.apk" "$1/app/build.gradle.kts"
+          }
+
+          pick() {
+            local s d
+            while IFS= read -r s; do
+              d="$(dirname "$s")"
+              if is_mine "$d"; then echo "$d"; return 0; fi
+            done < <(find "$1" -maxdepth 6 -type f -name 'settings.gradle.kts' -not -path '*/.git/*' | sort)
+            return 0
+          }
+
+          # 1) Proyecto ya descomprimido dentro del repositorio.
+          DIR="$(pick "$GITHUB_WORKSPACE")"
+
+          # 2) Si no está, buscar un .zip en el repositorio y descomprimirlo.
+          if [[ -z "$DIR" ]]; then
+            n=0
+            while IFS= read -r z; do
+              n=$((n+1))
+              out="$RUNNER_TEMP/unz_$n"
+              rm -rf "$out"; mkdir -p "$out"
+              echo "Probando zip: $z"
+              unzip -q -o "$z" -d "$out" || continue
+              cand="$(pick "$out")"
+              if [[ -n "$cand" ]]; then
+                DIR="$GITHUB_WORKSPACE/_proyecto_spaceman_apk"
+                mkdir -p "$DIR"
+                cp -a "$cand/." "$DIR/"
+                echo "Proyecto extraído de: $z"
+                break
+              fi
+            done < <(find "$GITHUB_WORKSPACE" -maxdepth 4 -type f -iname '*.zip' -not -path '*/.git/*' | sort)
+          fi
+
+          if [[ -z "$DIR" ]]; then
+            echo "::error::No se encontró el proyecto Spaceman APK (settings.gradle.kts + app/build.gradle.kts con com.spaceman.apk) ni dentro de un .zip."
+            {
+              echo "## Error: falta el proyecto Android"
+              echo "No encontré el proyecto en el repositorio. Sube Spaceman_APK.zip **tal cual** (el workflow lo descomprime)"
+              echo "o sube su contenido descomprimido (settings.gradle.kts, build.gradle.kts, gradle.properties y la carpeta app/)."
+              echo "### Archivos que veo en el repositorio"
+              echo '```text'
+              (cd "$GITHUB_WORKSPACE" && find . -maxdepth 3 -not -path './.git*' | sort | head -n 60)
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+          echo "Proyecto: $DIR"
+          echo "Proyecto Android detectado en: \`${DIR#$GITHUB_WORKSPACE/}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Compilar APK debug
+        shell: bash
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set +e
+          gradle assembleDebug --no-daemon --stacktrace > build.log 2>&1
+          code=$?
+          if [ "$code" -ne 0 ]; then
+            {
+              echo "## Error de compilación"
+              echo '```text'
+              grep -nE "^e: |error:|FAILURE|What went wrong|Caused by|Could not" -A4 build.log | head -n 100 || true
+              echo '```'
+              echo "### Últimas líneas del registro"
+              echo '```text'
+              tail -n 50 build.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$code"
+
+      - name: Subir APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Spaceman-APK-debug-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Subir registro si falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Spaceman-APK-build-log
+          path: ${{ env.PROJECT_DIR }}/build.log
+          if-no-files-found: ignore
+          retention-days: 7
